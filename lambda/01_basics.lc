@@ -1,0 +1,38 @@
+-- 01_basics.lc : 基礎型態與 lambda / 應用 / let / if
+-- 執行:  node lambdac.js examples/01_basics.lc && node lispvm.js examples/01_basics.lbc
+
+-- 基礎型態: 數字、布林、字串、符號、串列、空串列
+display 42;            newline ();
+display 3.14;          newline ();
+display true;          newline ();
+display "hello";       newline ();
+display 'lambda;       newline ();
+display [1, 2, 3];     newline ();
+display (1 :: 2 :: nil); newline ();
+write ["a", 'b, [true, nil]]; newline ();
+
+-- lambda 與應用 (所有函式都是 curried)
+let id = \x. x;
+let const = \x y. x;
+let add x y = x + y;                 -- let f x y = ...  是  \x y. ... 的簡寫
+display (id 42);                 newline ();
+display (const "first" "second"); newline ();
+display ((\x y. x * y) 6 7);     newline ();
+
+-- 部分套用 (curry)
+let inc = add 1;
+display (inc 41);                newline ();
+let twice = \f x. f (f x);
+display (twice inc 10);          newline ();
+display (twice (\s. string_append s "!") "wow"); newline ();
+
+-- 區域綁定與 if
+display (let x = 5 in let y = x * 2 in x + y); newline ();
+display (if 3 < 5 then "yes" else "no");       newline ();
+display (1 + 2 * 3 - 4 / 2);                   newline ();   -- 5
+display (10 % 3 == 1 && not (2 > 3));          newline ();   -- #t
+display (false || 7);                          newline ();   -- 7
+
+-- 型態判斷
+display [number? 1, string? 1, symbol? 'x, null? nil, pair? [1]]; newline ();
+display (string_append "Lambda " (number_to_string 2026)); newline ();

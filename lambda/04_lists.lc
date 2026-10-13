@@ -1,0 +1,40 @@
+-- 04_lists.lc : 串列、高階函式、curry、內建函式當一般函式用
+letrec map f l = if null? l then nil else f (car l) :: map f (cdr l);
+letrec filter p l =
+  if null? l then nil
+  else if p (car l) then car l :: filter p (cdr l)
+  else filter p (cdr l);
+letrec foldl f z l = if null? l then z else foldl f (f z (car l)) (cdr l);
+letrec foldr f z l = if null? l then z else f (car l) (foldr f z (cdr l));
+letrec range a b = if a >= b then nil else a :: range (a + 1) b;
+let compose f g = \x. f (g x);
+let flip f = \a b. f b a;
+
+let xs = range 1 11;
+display xs;                                      newline ();   -- (1 2 3 ... 10)
+display (map (\x. x * x) xs);                    newline ();   -- 平方
+display (filter (\x. x % 2 == 0) xs);            newline ();   -- 偶數
+display (foldl (+) 0 xs);                        newline ();   -- 55   (+) 是運算子當函式
+display (foldr (::) nil xs);                     newline ();   -- 複製串列
+
+-- 內建函式可以 curried / 部分套用
+display (map (max 5) [1, 9, 3, 7]);              newline ();   -- (5 9 5 7)
+display (map (flip (-) 1) [10, 20, 30]);         newline ();   -- (9 19 29)
+display (compose (\x. x * 2) (\x. x + 1) 5);     newline ();   -- 12
+display (map string_length ["a", "bb", "ccc"]);  newline ();   -- (1 2 3)
+display (foldl string_append "" ["Lam", "bda", "!"]); newline ();
+
+-- 內建串列函式
+display (length xs);                             newline ();
+display (reverse [1, 2, 3]);                     newline ();
+display (append [1, 2] [3, 4]);                  newline ();
+display (equal? [1, [2, 3]] (1 :: [2, 3] :: nil)); newline ();    -- #t
+
+-- 以 lambda 實作 quicksort
+letrec qsort l =
+  if null? l then nil
+  else let p = car l in
+       let rest = cdr l in
+       append (qsort (filter (\x. x < p) rest))
+              (p :: qsort (filter (\x. x >= p) rest));
+display (qsort [5, 3, 8, 1, 9, 2, 7, 3]); newline ();

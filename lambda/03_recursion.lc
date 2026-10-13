@@ -1,0 +1,31 @@
+-- 03_recursion.lc : letrec 遞迴、尾遞迴最佳化、區域遞迴
+letrec fact n = if n <= 1 then 1 else n * fact (n - 1);
+letrec fib n = if n < 2 then n else fib (n - 1) + fib (n - 2);
+letrec gcd a b = if b == 0 then a else gcd b (a % b);
+
+display (fact 20); newline ();       -- 2432902008176640000
+display (fib 20);  newline ();       -- 6765
+display (gcd 1071 462); newline ();  -- 21
+
+-- 尾遞迴：一百萬次迴圈不會爆堆疊
+letrec loop i acc = if i == 0 then acc else loop (i - 1) (acc + i);
+display (loop 1000000 0); newline ();   -- 500000500000
+
+-- 非尾遞迴深度 50000 (VM 呼叫堆疊在 heap)
+letrec count n = if n == 0 then 0 else 1 + count (n - 1);
+display (count 50000); newline ();
+
+-- 互相遞迴
+letrec is_even n = if n == 0 then true  else is_odd (n - 1);
+letrec is_odd  n = if n == 0 then false else is_even (n - 1);
+display [is_even 10, is_odd 10, is_even 7]; newline ();
+
+-- 區域 letrec (放在運算式裡)
+display (letrec sum n = if n == 0 then 0 else n + sum (n - 1) in sum 100); newline ();   -- 5050
+
+-- Collatz 步數
+letrec collatz n steps =
+  if n == 1 then steps
+  else if n % 2 == 0 then collatz (n / 2) (steps + 1)
+  else collatz (3 * n + 1) (steps + 1);
+display (collatz 27 0); newline ();   -- 111

@@ -1,0 +1,59 @@
+-- 02_church.lc : 純 lambda calculus —— Church 數、Church 布林、Pair、不動點組合子
+-- (只用 lambda 與應用；最後才用 to_int / to_bool 轉回基礎型態來印出)
+
+-- ===== Church 數 =====
+let zero = \f x. x;
+let succ = \n f x. f (n f x);
+let add  = \m n f x. m f (n f x);
+let mul  = \m n f. m (n f);
+let pow  = \m n. n m;                       -- m ^ n
+let to_int = \n. n (\k. k + 1) 0;
+
+let one = succ zero;
+let two = succ one;
+let three = succ two;
+let four = add two two;
+
+display (to_int zero);              newline ();   -- 0
+display (to_int (add two three));   newline ();   -- 5
+display (to_int (mul three four));  newline ();   -- 12
+display (to_int (pow two four));    newline ();   -- 16
+
+-- ===== Church 布林 =====
+let tru = \a b. a;
+let fls = \a b. b;
+let and_ = \p q. p q p;
+let or_  = \p q. p p q;
+let not_ = \p. p fls tru;
+let is_zero = \n. n (\x. fls) tru;
+let to_bool = \b. b true false;
+
+display (to_bool (and_ tru fls));          newline ();   -- #f
+display (to_bool (or_ tru fls));           newline ();   -- #t
+display (to_bool (not_ fls));              newline ();   -- #t
+display (to_bool (is_zero zero));          newline ();   -- #t
+display (to_bool (is_zero three));         newline ();   -- #f
+
+-- ===== Pair 與 predecessor =====
+let pair = \a b s. s a b;
+let fst = \p. p tru;
+let snd = \p. p fls;
+display (fst (pair 1 2));  display " ";  display (snd (pair 1 2)); newline ();
+
+let shift = \p. pair (snd p) (succ (snd p));
+let pred  = \n. fst (n shift (pair zero zero));
+let sub   = \m n. n pred m;
+display (to_int (pred four));        newline ();   -- 3
+display (to_int (sub four three));   newline ();   -- 1
+
+-- ===== 不動點組合子 (call-by-value 用 Z combinator) =====
+let Z = \f. (\x. f (\v. x x v)) (\x. f (\v. x x v));
+
+-- 用 Z 定義階乘 (使用原生數字)
+let fact = Z (\self n. if n == 0 then 1 else n * self (n - 1));
+display (fact 10); newline ();                    -- 3628800
+
+-- 用 Z 定義 Church 階乘 (用 thunk 延遲 if 分支，最後再套用一個假參數)
+let cfact = Z (\self n.
+  (is_zero n (\u. one) (\u. mul n (self (pred n)))) zero);
+display (to_int (cfact (succ three))); newline (); -- 4! = 24

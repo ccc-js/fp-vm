@@ -1,0 +1,22 @@
+; 閉包 / 高階函式 / set!
+(define (make-counter)
+  (let ((n 0))
+    (lambda () (set! n (+ n 1)) n)))
+(define c1 (make-counter))
+(define c2 (make-counter))
+(c1) (c1)
+(display (list (c1) (c2))) (newline)
+
+(define (map f l) (if (null? l) '() (cons (f (car l)) (map f (cdr l)))))
+(define (filter p l)
+  (cond ((null? l) '())
+        ((p (car l)) (cons (car l) (filter p (cdr l))))
+        (else (filter p (cdr l)))))
+(define (fold f init l) (if (null? l) init (fold f (f init (car l)) (cdr l))))
+(define (range a b) (if (>= a b) '() (cons a (range (+ a 1) b))))
+
+(display (map (lambda (x) (* x x)) (range 1 11))) (newline)
+(display (filter even? (range 1 21))) (newline)
+(display (fold + 0 (range 1 101))) (newline)
+(define (compose f g) (lambda (x) (f (g x))))
+(display ((compose (lambda (x) (* 2 x)) (lambda (x) (+ x 1))) 5)) (newline)
