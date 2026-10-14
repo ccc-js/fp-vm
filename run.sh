@@ -3,3 +3,4 @@
 ./run_wasm.sh
 ./run_clj.sh
 ./run_ml.sh
+./run_ocaml.sh
