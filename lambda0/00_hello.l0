@@ -1,0 +1,7 @@
+-- 00_hello.l0 : 最小的 lambda0 程式 —— 命名、整數、print
+-- 執行: node lambda0c.js lambda0/00_hello.l0 && node vm.js lambda0/00_hello.lbc
+
+answer = 42;
+double = \x.+ x x;
+print answer;
+print (double 21)

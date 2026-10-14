@@ -1,0 +1,15 @@
+-- 02_pairs.l0 : Church 序對 —— PAIR/FST/SND 全由函數建構
+-- 執行: node lambda0c.js lambda0/02_pairs.l0 && node vm.js lambda0/02_pairs.lbc
+
+TRUE = \x.\y.x;
+FALSE = \x.\y.y;
+IF = \b.\t.\e.b t e;
+PAIR = \x.\y.\f.f x y;
+FST = \p.p TRUE;
+SND = \p.p FALSE;
+p = PAIR 3 4;
+print (FST p);
+print (SND p);
+nested = PAIR 1 (PAIR 2 3);
+print (FST (SND nested));
+print (IF (FST (PAIR TRUE FALSE)) 7 8)

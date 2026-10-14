@@ -1,0 +1,18 @@
+-- 01_booleans.l0 : Church 布林 —— TRUE/FALSE/IF/NOT/AND/OR 全由函數建構
+-- 執行: node lambda0c.js lambda0/01_booleans.l0 && node vm.js lambda0/01_booleans.lbc
+
+TRUE = \x.\y.x;
+FALSE = \x.\y.y;
+IF = \b.\t.\e.b t e;
+NOT = \b.b FALSE TRUE;
+AND = \b.\c.b c FALSE;
+OR = \b.\c.b TRUE c;
+print (IF TRUE 1 0);
+print (IF FALSE 1 0);
+print (IF (NOT FALSE) 11 22);
+print (IF (AND TRUE TRUE) 100 200);
+print (IF (OR FALSE FALSE) 100 200);
+-- 整數比較回傳真正的 Church 布林，可直接餵給 IF
+print (IF (3 == 3) 10 20);
+print (IF (3 != 3) 10 20);
+print (IF (2 < 3) 7 8)

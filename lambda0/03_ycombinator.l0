@@ -1,0 +1,20 @@
+-- 03_ycombinator.l0 : Y 與 Z —— Church 的不動點組合子
+-- 執行: node lambda0c.js lambda0/03_ycombinator.l0 && node vm.js lambda0/03_ycombinator.lbc
+--
+-- 注意:本 VM 是 call-by-value，Y 會無窮迴圈，只能定義、不能呼叫；
+-- 遞迴請用 Z (call-by-value 版 Y)，分支須包成 thunk (\d. …)，
+-- 否則 IF 兩邊都先求值而停不下來。
+
+TRUE = \x.\y.x;
+FALSE = \x.\y.y;
+IF = \b.\t.\e.b t e;
+Y = \f.(\x.f (x x)) (\x.f (x x));
+Z = \f.(\x.f (\v.((x x) v))) (\x.f (\v.((x x) v)));
+FACTBODY = \f.\n.((IF (n == 0)) (\d.1) (\d.* n (f (n - 1)))) 0;
+FACT = Z FACTBODY;
+print (FACT 5);
+print (FACT 10);
+FIBBODY = \f.\n.((IF (n < 2)) (\d.n) (\d.+ (f (n - 1)) (f (n - 2)))) 0;
+FIB = Z FIBBODY;
+print (FIB 10);
+print (FIB 15)

@@ -1,0 +1,31 @@
+-- 04_lists.l0 : Church 串列 (fold 編碼) —— NIL/CONS/ISNIL/HEAD/TAIL/LENGTH/SUM/MAP
+-- 執行: node lambda0c.js lambda0/04_lists.l0 && node vm.js lambda0/04_lists.lbc
+-- (各檔獨立，此處重寫所需的布林/序對定義)
+--
+-- 串列採 fold 編碼:NIL = \c.\n.n，CONS h t = \c.\n.c h (t c n)。
+-- 與序對編碼不同，這裡 NIL 真的吃掉兩個參數，故 ISNIL 可直接以 fold 判別；
+-- LENGTH/SUM/MAP 也都是 fold，不需 Z、不需 thunk (全是全函數，無分支求值問題)。
+
+TRUE = \x.\y.x;
+FALSE = \x.\y.y;
+IF = \b.\t.\e.b t e;
+PAIR = \x.\y.\f.f x y;
+FST = \p.p TRUE;
+SND = \p.p FALSE;
+NIL = \c.\n.n;
+CONS = \h.\t.\c.\n.c h (t c n);
+ISNIL = \l.l (\h.\r.FALSE) TRUE;
+HEAD = \l.l (\h.\r.h) 0;
+TAIL = \l.FST (l (\h.\p.PAIR (SND p) (CONS h (SND p))) (PAIR NIL NIL));
+LENGTH = \l.l (\h.\r.+ r 1) 0;
+SUM = \l.l (\h.\r.+ h r) 0;
+MAP = \f.\l.l (\h.\r.CONS (f h) r) NIL;
+data = CONS 3 (CONS 1 (CONS 4 (CONS 1 NIL)));
+print (LENGTH data);
+print (SUM data);
+print (HEAD data);
+print (HEAD (TAIL data));
+print (LENGTH (TAIL data));
+print (HEAD ((MAP (\x.* x 10)) data));
+print (IF (ISNIL NIL) 111 222);
+print (SUM (TAIL (TAIL data)))
