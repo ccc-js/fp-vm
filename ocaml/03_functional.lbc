@@ -18,109 +18,103 @@
   CLOSURE ml/incr#7
   DEF ml/incr
   POP
-  CLOSURE ml/compare/2#8
-  DEF ml/compare/2
-  POP
-  CLOSURE ml/compare#9
-  DEF ml/compare
-  POP
-  CLOSURE ml/print_endline#11
+  CLOSURE ml/print_endline#8
   DEF ml/print_endline
   POP
-  CLOSURE ml/List.map/2#12
+  CLOSURE ml/List.map/2#9
   DEF ml/List.map/2
   POP
-  CLOSURE ml/List.map#15
+  CLOSURE ml/List.map#12
   DEF ml/List.map
   POP
-  CLOSURE ml/List.iter/2#17
+  CLOSURE ml/List.iter/2#14
   DEF ml/List.iter/2
   POP
-  CLOSURE ml/List.iter#19
+  CLOSURE ml/List.iter#16
   DEF ml/List.iter
   POP
-  CLOSURE ml/List.fold_left/3#21
+  CLOSURE ml/List.fold_left/3#18
   DEF ml/List.fold_left/3
   POP
-  CLOSURE ml/List.fold_left#23
+  CLOSURE ml/List.fold_left#20
   DEF ml/List.fold_left
   POP
-  CLOSURE ml/List.filter/2#26
+  CLOSURE ml/List.filter/2#23
   DEF ml/List.filter/2
   POP
-  CLOSURE ml/List.filter#28
+  CLOSURE ml/List.filter#25
   DEF ml/List.filter
   POP
-  CLOSURE ml/List.assoc_opt/2#30
+  CLOSURE ml/List.assoc_opt/2#27
   DEF ml/List.assoc_opt/2
   POP
-  CLOSURE ml/List.assoc_opt#32
+  CLOSURE ml/List.assoc_opt#29
   DEF ml/List.assoc_opt
   POP
-  CLOSURE ml/List.init/2#34
+  CLOSURE ml/List.init/2#31
   DEF ml/List.init/2
   POP
-  CLOSURE ml/List.init#38
+  CLOSURE ml/List.init#35
   DEF ml/List.init
   POP
-  CLOSURE ml/__take/2#40
+  CLOSURE ml/__take/2#37
   DEF ml/__take/2
   POP
-  CLOSURE ml/__take#42
+  CLOSURE ml/__take#39
   DEF ml/__take
   POP
-  CLOSURE ml/__drop/2#44
+  CLOSURE ml/__drop/2#41
   DEF ml/__drop/2
   POP
-  CLOSURE ml/__drop#46
+  CLOSURE ml/__drop#43
   DEF ml/__drop
   POP
-  CLOSURE ml/__merge/3#48
+  CLOSURE ml/__merge/3#45
   DEF ml/__merge/3
   POP
-  CLOSURE ml/__merge#51
+  CLOSURE ml/__merge#48
   DEF ml/__merge
   POP
-  CLOSURE ml/List.sort/2#54
+  CLOSURE ml/List.sort/2#51
   DEF ml/List.sort/2
   POP
-  CLOSURE ml/List.sort#57
+  CLOSURE ml/List.sort#54
   DEF ml/List.sort
   POP
-  CLOSURE ml/String.concat/2#59
+  CLOSURE ml/String.concat/2#56
   DEF ml/String.concat/2
   POP
-  CLOSURE ml/String.concat#62
+  CLOSURE ml/String.concat#59
   DEF ml/String.concat
   POP
-  CLOSURE compose/3#64
+  CLOSURE compose/3#61
   DEF compose/3
   POP
-  CLOSURE compose#65
+  CLOSURE compose#62
   DEF compose
   POP
-  CLOSURE >>/3#68
+  CLOSURE >>/3#65
   DEF >>/3
   POP
-  CLOSURE >>#69
+  CLOSURE >>#66
   DEF >>
   POP
-  CLOSURE twice/2#72
+  CLOSURE twice/2#69
   DEF twice/2
   POP
-  CLOSURE twice#73
+  CLOSURE twice#70
   DEF twice
   POP
-  CLOSURE add/2#75
+  CLOSURE add/2#72
   DEF add/2
   POP
-  CLOSURE add#76
+  CLOSURE add#73
   DEF add
   POP
-  CLOSURE inc#78
+  CLOSURE inc#75
   DEF inc
   POP
-  CLOSURE double#79
+  CLOSURE double#76
   DEF double
   POP
   LOAD display
@@ -134,7 +128,7 @@
   CALL 1
   CONST " "
   LOAD number->string
-  CLOSURE lambda#80
+  CLOSURE lambda#77
   CONST 5
   CALL 1
   CALL 1
@@ -150,7 +144,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v129
+  DEF %v322
   POP
   LOAD ml/|>/2
   LOAD ml/|>/2
@@ -167,16 +161,16 @@
   CONST 9
   CONST 10
   CALL 10
+  CLOSURE lambda#78
+  CLOSURE lambda#80
+  CALL 1
+  CALL 2
   CLOSURE lambda#81
   CLOSURE lambda#83
   CALL 1
   CALL 2
   CLOSURE lambda#84
   CLOSURE lambda#86
-  CALL 1
-  CALL 2
-  CLOSURE lambda#87
-  CLOSURE lambda#89
   CALL 1
   CALL 2
   DEF result
@@ -192,27 +186,27 @@
   CALL 1
   POP
   CONST null
-  DEF %v139
+  DEF %v332
   POP
-  CLOSURE my_map#91
+  CLOSURE my_map#88
   DEF my_map
   POP
-  CLOSURE my_filter#94
+  CLOSURE my_filter#91
   DEF my_filter
   POP
-  CLOSURE my_fold/2#97
+  CLOSURE my_fold/2#94
   DEF my_fold/2
   POP
-  CLOSURE my_fold#100
+  CLOSURE my_fold#97
   DEF my_fold
   POP
-  CLOSURE show_list#102
+  CLOSURE show_list#99
   DEF show_list
   POP
   LOAD ml/print_endline
   LOAD show_list
   LOAD my_map
-  CLOSURE lambda#103
+  CLOSURE lambda#100
   CALL 1
   LOAD list
   CONST 1
@@ -222,12 +216,12 @@
   CALL 1
   CALL 1
   CALL 1
-  DEF %v142
+  DEF %v335
   POP
   LOAD ml/print_endline
   LOAD show_list
   LOAD my_filter
-  CLOSURE lambda#104
+  CLOSURE lambda#101
   CALL 1
   LOAD list
   CONST 1
@@ -238,13 +232,13 @@
   CALL 1
   CALL 1
   CALL 1
-  DEF %v143
+  DEF %v336
   POP
   LOAD display
   LOAD string-append
   LOAD number->string
   LOAD my_fold/2
-  CLOSURE lambda#105
+  CLOSURE lambda#102
   CONST 1
   CALL 2
   LOAD list
@@ -261,9 +255,9 @@
   CALL 1
   POP
   CONST null
-  DEF %v144
+  DEF %v337
   POP
-  CLOSURE make_adder#107
+  CLOSURE make_adder#104
   DEF make_adder
   POP
   LOAD make_adder
@@ -291,9 +285,9 @@
   CALL 1
   POP
   CONST null
-  DEF %v145
+  DEF %v338
   POP
-  CLOSURE make_counter#109
+  CLOSURE make_counter#106
   DEF make_counter
   POP
   LOAD make_counter
@@ -309,12 +303,12 @@
   LOAD c1
   CONST null
   CALL 1
-  DEF %v148
+  DEF %v341
   POP
   LOAD c1
   CONST null
   CALL 1
-  DEF %v149
+  DEF %v342
   POP
   LOAD display
   LOAD string-append
@@ -335,9 +329,9 @@
   CALL 1
   POP
   CONST null
-  DEF %v150
+  DEF %v343
   POP
-  CLOSURE lambda#112
+  CLOSURE lambda#109
   LOAD ml/ref
   CONST null
   CALL 1
@@ -357,12 +351,12 @@
   CALL 1
   POP
   CONST null
-  DEF %v152
+  DEF %v345
   POP
-  CLOSURE even#118
+  CLOSURE even#115
   DEF even
   POP
-  CLOSURE odd#119
+  CLOSURE odd#116
   DEF odd
   POP
   LOAD display
@@ -371,33 +365,33 @@
   LOAD even
   CONST 1000
   CALL 1
+  JF L44
+  CONST "true"
+  JMP L45
+L44:
+  CONST "false"
+L45:
+  CONST ", odd 7 = "
+  LOAD odd
+  CONST 7
+  CALL 1
   JF L46
   CONST "true"
   JMP L47
 L46:
   CONST "false"
 L47:
-  CONST ", odd 7 = "
-  LOAD odd
-  CONST 7
-  CALL 1
-  JF L48
-  CONST "true"
-  JMP L49
-L48:
-  CONST "false"
-L49:
   CONST "\n"
   CALL 5
   CALL 1
   POP
   CONST null
-  DEF %v153
+  DEF %v346
   POP
-  CLOSURE loop/2#120
+  CLOSURE loop/2#117
   DEF loop/2
   POP
-  CLOSURE loop#121
+  CLOSURE loop#118
   DEF loop
   POP
   LOAD display
@@ -414,9 +408,9 @@ L49:
   CALL 1
   POP
   CONST null
-  DEF %v156
+  DEF %v349
   POP
-  CLOSURE depth#123
+  CLOSURE depth#120
   DEF depth
   POP
   LOAD display
@@ -432,9 +426,9 @@ L49:
   CALL 1
   POP
   CONST null
-  DEF %v157
+  DEF %v350
   POP
-  CLOSURE sum_to#124
+  CLOSURE sum_to#121
   DEF sum_to
   POP
   LOAD display
@@ -450,9 +444,9 @@ L49:
   CALL 1
   POP
   CONST null
-  DEF %v160
+  DEF %v353
   POP
-  CLOSURE qsort#129
+  CLOSURE qsort#126
   DEF qsort
   POP
   LOAD list
@@ -474,29 +468,29 @@ L49:
   CALL 1
   CALL 1
   CALL 1
-  DEF %v161
+  DEF %v354
   POP
   LOAD ml/print_endline
   LOAD show_list
   LOAD ml/List.sort/2
-  LOAD ml/compare
+  CLOSURE lambda#132
   LOAD data
   CALL 2
   CALL 1
   CALL 1
-  DEF %v162
+  DEF %v355
   POP
   LOAD ml/print_endline
   LOAD show_list
   LOAD ml/List.sort/2
-  CLOSURE lambda#135
+  CLOSURE lambda#134
   LOAD data
   CALL 2
   CALL 1
   CALL 1
-  DEF %v163
+  DEF %v358
   POP
-  CLOSURE sieve#137
+  CLOSURE sieve#136
   DEF sieve
   POP
   LOAD ml/print_endline
@@ -504,14 +498,14 @@ L49:
   LOAD sieve
   LOAD ml/List.init/2
   CONST 49
-  CLOSURE lambda#140
+  CLOSURE lambda#139
   CALL 2
   CALL 1
   CALL 1
   CALL 1
-  DEF %v164
+  DEF %v359
   POP
-  CLOSURE collatz#141
+  CLOSURE collatz#140
   DEF collatz
   POP
   LOAD display
@@ -527,9 +521,9 @@ L49:
   CALL 1
   POP
   CONST null
-  DEF %v166
+  DEF %v361
   POP
-  CLOSURE sum_squares#146
+  CLOSURE sum_squares#145
   DEF sum_squares
   POP
   LOAD display
@@ -545,31 +539,31 @@ L49:
   CALL 1
   POP
   CONST null
-  DEF %v169
+  DEF %v364
   POP
-  CLOSURE lambda#151
+  CLOSURE lambda#150
   CONST 1
   CALL 1
   POP
   LOAD ml/print_endline
   CONST "liftoff!"
   CALL 1
-  DEF %v170
+  DEF %v365
   POP
-  CLOSURE pair_up/2#154
+  CLOSURE pair_up/2#153
   DEF pair_up/2
   POP
-  CLOSURE pair_up#155
+  CLOSURE pair_up#154
   DEF pair_up
   POP
-  CLOSURE zip/2#157
+  CLOSURE zip/2#156
   DEF zip/2
   POP
-  CLOSURE zip#160
+  CLOSURE zip#159
   DEF zip
   POP
   LOAD ml/List.iter/2
-  CLOSURE lambda#162
+  CLOSURE lambda#161
   LOAD zip/2
   LOAD list
   CONST 1
@@ -583,12 +577,12 @@ L49:
   CALL 3
   CALL 2
   CALL 2
-  DEF %v178
+  DEF %v373
   POP
   LOAD newline
   CONST null
   CALL 1
-  DEF %v180
+  DEF %v375
   HALT
 .func ml/ref#0 v
   CLOSURE lambda#1
@@ -639,34 +633,7 @@ L0:
   CONST 1
   CALL 2
   TAILCALL 2
-.func ml/compare/2#8 a b
-  LOAD <
-  LOAD a
-  LOAD b
-  CALL 2
-  JF L1
-  CONST -1
-  RET
-L1:
-  LOAD equal?
-  LOAD a
-  LOAD b
-  CALL 2
-  JF L2
-  CONST 0
-  RET
-L2:
-  CONST 1
-  RET
-.func ml/compare#9 %c9
-  CLOSURE lambda#10
-  RET
-.func lambda#10 %c10
-  LOAD ml/compare/2
-  LOAD %c9
-  LOAD %c10
-  TAILCALL 2
-.func ml/print_endline#11 s
+.func ml/print_endline#8 s
   LOAD display
   LOAD s
   CALL 1
@@ -674,7 +641,53 @@ L2:
   LOAD newline
   CONST null
   TAILCALL 1
-.func ml/List.map/2#12 f l
+.func ml/List.map/2#9 f l
+  LOAD null?
+  LOAD l
+  CALL 1
+  JF L1
+  CONST null
+  RET
+L1:
+  LOAD pair?
+  LOAD l
+  CALL 1
+  JF L2
+  CLOSURE lambda#10
+  LOAD car
+  LOAD l
+  CALL 1
+  LOAD cdr
+  LOAD l
+  CALL 1
+  TAILCALL 2
+L2:
+  LOAD error
+  CONST "Match_failure"
+  TAILCALL 1
+.func lambda#10 x xs
+  CLOSURE lambda#11
+  LOAD f
+  LOAD x
+  CALL 1
+  TAILCALL 1
+.func lambda#11 y
+  LOAD cons
+  LOAD y
+  LOAD ml/List.map/2
+  LOAD f
+  LOAD xs
+  CALL 2
+  TAILCALL 2
+.func ml/List.map#12 %c42
+  CLOSURE lambda#13
+  RET
+.func lambda#13 %c43
+  LOAD ml/List.map/2
+  LOAD %c42
+  LOAD %c43
+  TAILCALL 2
+.func ml/List.iter/2#14 f l
   LOAD null?
   LOAD l
   CALL 1
@@ -686,7 +699,7 @@ L3:
   LOAD l
   CALL 1
   JF L4
-  CLOSURE lambda#13
+  CLOSURE lambda#15
   LOAD car
   LOAD l
   CALL 1
@@ -698,41 +711,36 @@ L4:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#13 x xs
-  CLOSURE lambda#14
+.func lambda#15 x xs
   LOAD f
   LOAD x
   CALL 1
-  TAILCALL 1
-.func lambda#14 y
-  LOAD cons
-  LOAD y
-  LOAD ml/List.map/2
+  POP
+  LOAD ml/List.iter/2
   LOAD f
   LOAD xs
-  CALL 2
   TAILCALL 2
-.func ml/List.map#15 %c28
-  CLOSURE lambda#16
+.func ml/List.iter#16 %c48
+  CLOSURE lambda#17
   RET
-.func lambda#16 %c29
-  LOAD ml/List.map/2
-  LOAD %c28
-  LOAD %c29
+.func lambda#17 %c49
+  LOAD ml/List.iter/2
+  LOAD %c48
+  LOAD %c49
   TAILCALL 2
-.func ml/List.iter/2#17 f l
+.func ml/List.fold_left/3#18 f acc l
   LOAD null?
   LOAD l
   CALL 1
   JF L5
-  CONST null
+  LOAD acc
   RET
 L5:
   LOAD pair?
   LOAD l
   CALL 1
   JF L6
-  CLOSURE lambda#18
+  CLOSURE lambda#19
   LOAD car
   LOAD l
   CALL 1
@@ -744,36 +752,41 @@ L6:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#18 x xs
+.func lambda#19 x xs
+  LOAD ml/List.fold_left/3
   LOAD f
+  LOAD f
+  LOAD acc
+  CALL 1
   LOAD x
   CALL 1
-  POP
-  LOAD ml/List.iter/2
-  LOAD f
   LOAD xs
-  TAILCALL 2
-.func ml/List.iter#19 %c34
-  CLOSURE lambda#20
+  TAILCALL 3
+.func ml/List.fold_left#20 %c54
+  CLOSURE lambda#21
   RET
-.func lambda#20 %c35
-  LOAD ml/List.iter/2
-  LOAD %c34
-  LOAD %c35
-  TAILCALL 2
-.func ml/List.fold_left/3#21 f acc l
+.func lambda#21 %c55
+  CLOSURE lambda#22
+  RET
+.func lambda#22 %c56
+  LOAD ml/List.fold_left/3
+  LOAD %c54
+  LOAD %c55
+  LOAD %c56
+  TAILCALL 3
+.func ml/List.filter/2#23 p l
   LOAD null?
   LOAD l
   CALL 1
   JF L7
-  LOAD acc
+  CONST null
   RET
 L7:
   LOAD pair?
   LOAD l
   CALL 1
   JF L8
-  CLOSURE lambda#22
+  CLOSURE lambda#24
   LOAD car
   LOAD l
   CALL 1
@@ -785,57 +798,11 @@ L8:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#22 x xs
-  LOAD ml/List.fold_left/3
-  LOAD f
-  LOAD f
-  LOAD acc
-  CALL 1
-  LOAD x
-  CALL 1
-  LOAD xs
-  TAILCALL 3
-.func ml/List.fold_left#23 %c40
-  CLOSURE lambda#24
-  RET
-.func lambda#24 %c41
-  CLOSURE lambda#25
-  RET
-.func lambda#25 %c42
-  LOAD ml/List.fold_left/3
-  LOAD %c40
-  LOAD %c41
-  LOAD %c42
-  TAILCALL 3
-.func ml/List.filter/2#26 p l
-  LOAD null?
-  LOAD l
-  CALL 1
-  JF L9
-  CONST null
-  RET
-L9:
-  LOAD pair?
-  LOAD l
-  CALL 1
-  JF L10
-  CLOSURE lambda#27
-  LOAD car
-  LOAD l
-  CALL 1
-  LOAD cdr
-  LOAD l
-  CALL 1
-  TAILCALL 2
-L10:
-  LOAD error
-  CONST "Match_failure"
-  TAILCALL 1
-.func lambda#27 x xs
+.func lambda#24 x xs
   LOAD p
   LOAD x
   CALL 1
-  JF L11
+  JF L9
   LOAD cons
   LOAD x
   LOAD ml/List.filter/2
@@ -843,32 +810,32 @@ L10:
   LOAD xs
   CALL 2
   TAILCALL 2
-L11:
+L9:
   LOAD ml/List.filter/2
   LOAD p
   LOAD xs
   TAILCALL 2
-.func ml/List.filter#28 %c46
-  CLOSURE lambda#29
+.func ml/List.filter#25 %c60
+  CLOSURE lambda#26
   RET
-.func lambda#29 %c47
+.func lambda#26 %c61
   LOAD ml/List.filter/2
-  LOAD %c46
-  LOAD %c47
+  LOAD %c60
+  LOAD %c61
   TAILCALL 2
-.func ml/List.assoc_opt/2#30 k l
+.func ml/List.assoc_opt/2#27 k l
   LOAD null?
   LOAD l
   CALL 1
-  JF L12
+  JF L10
   CONST {"list":[{"sym":"None"}]}
   RET
-L12:
+L10:
   LOAD pair?
   LOAD l
   CALL 1
-  JF L13
-  CLOSURE lambda#31
+  JF L11
+  CLOSURE lambda#28
   LOAD car
   LOAD car
   LOAD l
@@ -883,58 +850,58 @@ L12:
   LOAD l
   CALL 1
   TAILCALL 3
-L13:
+L11:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#31 a b rest
+.func lambda#28 a b rest
   LOAD equal?
   LOAD a
   LOAD k
   CALL 2
-  JF L14
+  JF L12
   LOAD list
   CONST {"sym":"Some"}
   LOAD b
   TAILCALL 2
-L14:
+L12:
   LOAD ml/List.assoc_opt/2
   LOAD k
   LOAD rest
   TAILCALL 2
-.func ml/List.assoc_opt#32 %c62
-  CLOSURE lambda#33
+.func ml/List.assoc_opt#29 %c76
+  CLOSURE lambda#30
   RET
-.func lambda#33 %c63
+.func lambda#30 %c77
   LOAD ml/List.assoc_opt/2
-  LOAD %c62
-  LOAD %c63
+  LOAD %c76
+  LOAD %c77
   TAILCALL 2
-.func ml/List.init/2#34 n f
-  CLOSURE lambda#35
+.func ml/List.init/2#31 n f
+  CLOSURE lambda#32
   TAILCALL 0
-.func lambda#35
-  CLOSURE go#36
+.func lambda#32
+  CLOSURE go#33
   DEF go
   POP
   LOAD go
   CONST 0
   TAILCALL 1
-.func go#36 i
+.func go#33 i
   LOAD >=
   LOAD i
   LOAD n
   CALL 2
-  JF L15
+  JF L13
   CONST null
   RET
-L15:
-  CLOSURE lambda#37
+L13:
+  CLOSURE lambda#34
   LOAD f
   LOAD i
   CALL 1
   TAILCALL 1
-.func lambda#37 y
+.func lambda#34 y
   LOAD cons
   LOAD y
   LOAD go
@@ -944,35 +911,35 @@ L15:
   CALL 2
   CALL 1
   TAILCALL 2
-.func ml/List.init#38 %c82
-  CLOSURE lambda#39
+.func ml/List.init#35 %c96
+  CLOSURE lambda#36
   RET
-.func lambda#39 %c83
+.func lambda#36 %c97
   LOAD ml/List.init/2
-  LOAD %c82
-  LOAD %c83
+  LOAD %c96
+  LOAD %c97
   TAILCALL 2
-.func ml/__take/2#40 n l
+.func ml/__take/2#37 n l
   LOAD <=
   LOAD n
   CONST 0
   CALL 2
-  JF L16
+  JF L14
   CONST null
   RET
-L16:
+L14:
   LOAD null?
   LOAD l
   CALL 1
-  JF L17
+  JF L15
   CONST null
   RET
-L17:
+L15:
   LOAD pair?
   LOAD l
   CALL 1
-  JF L18
-  CLOSURE lambda#41
+  JF L16
+  CLOSURE lambda#38
   LOAD car
   LOAD l
   CALL 1
@@ -980,11 +947,11 @@ L17:
   LOAD l
   CALL 1
   TAILCALL 2
-L18:
+L16:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#41 x xs
+.func lambda#38 x xs
   LOAD cons
   LOAD x
   LOAD ml/__take/2
@@ -995,44 +962,44 @@ L18:
   LOAD xs
   CALL 2
   TAILCALL 2
-.func ml/__take#42 %c87
-  CLOSURE lambda#43
+.func ml/__take#39 %c101
+  CLOSURE lambda#40
   RET
-.func lambda#43 %c88
+.func lambda#40 %c102
   LOAD ml/__take/2
-  LOAD %c87
-  LOAD %c88
+  LOAD %c101
+  LOAD %c102
   TAILCALL 2
-.func ml/__drop/2#44 n l
+.func ml/__drop/2#41 n l
   LOAD <=
   LOAD n
   CONST 0
   CALL 2
-  JF L19
+  JF L17
   LOAD l
   RET
-L19:
+L17:
   LOAD null?
   LOAD l
   CALL 1
-  JF L20
+  JF L18
   CONST null
   RET
-L20:
+L18:
   LOAD pair?
   LOAD l
   CALL 1
-  JF L21
-  CLOSURE lambda#45
+  JF L19
+  CLOSURE lambda#42
   LOAD cdr
   LOAD l
   CALL 1
   TAILCALL 1
-L21:
+L19:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#45 xs
+.func lambda#42 xs
   LOAD ml/__drop/2
   LOAD -
   LOAD n
@@ -1040,83 +1007,83 @@ L21:
   CALL 2
   LOAD xs
   TAILCALL 2
-.func ml/__drop#46 %c89
-  CLOSURE lambda#47
+.func ml/__drop#43 %c103
+  CLOSURE lambda#44
   RET
-.func lambda#47 %c90
+.func lambda#44 %c104
   LOAD ml/__drop/2
-  LOAD %c89
-  LOAD %c90
+  LOAD %c103
+  LOAD %c104
   TAILCALL 2
-.func ml/__merge/3#48 cmp a b
-  CLOSURE lambda#49
+.func ml/__merge/3#45 cmp a b
+  CLOSURE lambda#46
   LOAD list
   LOAD a
   LOAD b
   CALL 2
   TAILCALL 1
-.func lambda#49 %m91
+.func lambda#46 %m105
   LOAD null?
   LOAD car
-  LOAD %m91
+  LOAD %m105
   CALL 1
   CALL 1
-  JF L22
+  JF L20
   LOAD b
   RET
-L22:
+L20:
   LOAD null?
   LOAD cadr
-  LOAD %m91
+  LOAD %m105
+  CALL 1
+  CALL 1
+  JF L21
+  LOAD a
+  RET
+L21:
+  LOAD pair?
+  LOAD car
+  LOAD %m105
   CALL 1
   CALL 1
   JF L23
-  LOAD a
-  RET
+  LOAD pair?
+  LOAD cadr
+  LOAD %m105
+  CALL 1
+  CALL 1
+  JMP L24
 L23:
-  LOAD pair?
-  LOAD car
-  LOAD %m91
-  CALL 1
-  CALL 1
-  JF L25
-  LOAD pair?
-  LOAD cadr
-  LOAD %m91
-  CALL 1
-  CALL 1
-  JMP L26
-L25:
   CONST false
-L26:
-  JF L24
-  CLOSURE lambda#50
+L24:
+  JF L22
+  CLOSURE lambda#47
   LOAD car
   LOAD car
-  LOAD %m91
+  LOAD %m105
   CALL 1
   CALL 1
   LOAD cdr
   LOAD car
-  LOAD %m91
+  LOAD %m105
   CALL 1
   CALL 1
   LOAD car
   LOAD cadr
-  LOAD %m91
+  LOAD %m105
   CALL 1
   CALL 1
   LOAD cdr
   LOAD cadr
-  LOAD %m91
+  LOAD %m105
   CALL 1
   CALL 1
   TAILCALL 4
-L24:
+L22:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#50 x xs y ys
+.func lambda#47 x xs y ys
   LOAD <=
   LOAD cmp
   LOAD x
@@ -1125,7 +1092,7 @@ L24:
   CALL 1
   CONST 0
   CALL 2
-  JF L27
+  JF L25
   LOAD cons
   LOAD x
   LOAD ml/__merge/3
@@ -1134,7 +1101,7 @@ L24:
   LOAD b
   CALL 3
   TAILCALL 2
-L27:
+L25:
   LOAD cons
   LOAD y
   LOAD ml/__merge/3
@@ -1143,40 +1110,40 @@ L27:
   LOAD ys
   CALL 3
   TAILCALL 2
-.func ml/__merge#51 %c92
-  CLOSURE lambda#52
+.func ml/__merge#48 %c106
+  CLOSURE lambda#49
   RET
-.func lambda#52 %c93
-  CLOSURE lambda#53
+.func lambda#49 %c107
+  CLOSURE lambda#50
   RET
-.func lambda#53 %c94
+.func lambda#50 %c108
   LOAD ml/__merge/3
-  LOAD %c92
-  LOAD %c93
-  LOAD %c94
+  LOAD %c106
+  LOAD %c107
+  LOAD %c108
   TAILCALL 3
-.func ml/List.sort/2#54 cmp l
-  CLOSURE lambda#55
+.func ml/List.sort/2#51 cmp l
+  CLOSURE lambda#52
   LOAD length
   LOAD l
   CALL 1
   TAILCALL 1
-.func lambda#55 n
+.func lambda#52 n
   LOAD <
   LOAD n
   CONST 2
   CALL 2
-  JF L28
+  JF L26
   LOAD l
   RET
-L28:
-  CLOSURE lambda#56
+L26:
+  CLOSURE lambda#53
   LOAD quotient
   LOAD n
   CONST 2
   CALL 2
   TAILCALL 1
-.func lambda#56 h
+.func lambda#53 h
   LOAD ml/__merge/3
   LOAD cmp
   LOAD ml/List.sort/2
@@ -1194,47 +1161,47 @@ L28:
   CALL 2
   CALL 2
   TAILCALL 3
-.func ml/List.sort#57 %c95
-  CLOSURE lambda#58
+.func ml/List.sort#54 %c109
+  CLOSURE lambda#55
   RET
-.func lambda#58 %c96
+.func lambda#55 %c110
   LOAD ml/List.sort/2
-  LOAD %c95
-  LOAD %c96
+  LOAD %c109
+  LOAD %c110
   TAILCALL 2
-.func ml/String.concat/2#59 sep l
+.func ml/String.concat/2#56 sep l
   LOAD null?
   LOAD l
   CALL 1
-  JF L29
+  JF L27
   CONST ""
   RET
+L27:
+  LOAD pair?
+  LOAD l
+  CALL 1
+  JF L29
+  LOAD null?
+  LOAD cdr
+  LOAD l
+  CALL 1
+  CALL 1
+  JMP L30
 L29:
+  CONST false
+L30:
+  JF L28
+  CLOSURE lambda#57
+  LOAD car
+  LOAD l
+  CALL 1
+  TAILCALL 1
+L28:
   LOAD pair?
   LOAD l
   CALL 1
   JF L31
-  LOAD null?
-  LOAD cdr
-  LOAD l
-  CALL 1
-  CALL 1
-  JMP L32
-L31:
-  CONST false
-L32:
-  JF L30
-  CLOSURE lambda#60
-  LOAD car
-  LOAD l
-  CALL 1
-  TAILCALL 1
-L30:
-  LOAD pair?
-  LOAD l
-  CALL 1
-  JF L33
-  CLOSURE lambda#61
+  CLOSURE lambda#58
   LOAD car
   LOAD l
   CALL 1
@@ -1242,14 +1209,14 @@ L30:
   LOAD l
   CALL 1
   TAILCALL 2
-L33:
+L31:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#60 x
+.func lambda#57 x
   LOAD x
   RET
-.func lambda#61 x xs
+.func lambda#58 x xs
   LOAD string-append
   LOAD x
   LOAD string-append
@@ -1260,102 +1227,102 @@ L33:
   CALL 2
   CALL 2
   TAILCALL 2
-.func ml/String.concat#62 %c116
+.func ml/String.concat#59 %c135
+  CLOSURE lambda#60
+  RET
+.func lambda#60 %c136
+  LOAD ml/String.concat/2
+  LOAD %c135
+  LOAD %c136
+  TAILCALL 2
+.func compose/3#61 f g x
+  LOAD f
+  LOAD g
+  LOAD x
+  CALL 1
+  TAILCALL 1
+.func compose#62 %c311
   CLOSURE lambda#63
   RET
-.func lambda#63 %c117
-  LOAD ml/String.concat/2
-  LOAD %c116
-  LOAD %c117
-  TAILCALL 2
-.func compose/3#64 f g x
-  LOAD f
+.func lambda#63 %c312
+  CLOSURE lambda#64
+  RET
+.func lambda#64 %c313
+  LOAD compose/3
+  LOAD %c311
+  LOAD %c312
+  LOAD %c313
+  TAILCALL 3
+.func >>/3#65 f g x
   LOAD g
+  LOAD f
   LOAD x
   CALL 1
   TAILCALL 1
-.func compose#65 %c118
-  CLOSURE lambda#66
-  RET
-.func lambda#66 %c119
+.func >>#66 %c314
   CLOSURE lambda#67
   RET
-.func lambda#67 %c120
-  LOAD compose/3
-  LOAD %c118
-  LOAD %c119
-  LOAD %c120
+.func lambda#67 %c315
+  CLOSURE lambda#68
+  RET
+.func lambda#68 %c316
+  LOAD >>/3
+  LOAD %c314
+  LOAD %c315
+  LOAD %c316
   TAILCALL 3
-.func >>/3#68 f g x
-  LOAD g
+.func twice/2#69 f x
+  LOAD f
   LOAD f
   LOAD x
   CALL 1
   TAILCALL 1
-.func >>#69 %c121
-  CLOSURE lambda#70
-  RET
-.func lambda#70 %c122
+.func twice#70 %c317
   CLOSURE lambda#71
   RET
-.func lambda#71 %c123
-  LOAD >>/3
-  LOAD %c121
-  LOAD %c122
-  LOAD %c123
-  TAILCALL 3
-.func twice/2#72 f x
-  LOAD f
-  LOAD f
-  LOAD x
-  CALL 1
-  TAILCALL 1
-.func twice#73 %c124
-  CLOSURE lambda#74
-  RET
-.func lambda#74 %c125
+.func lambda#71 %c318
   LOAD twice/2
-  LOAD %c124
-  LOAD %c125
+  LOAD %c317
+  LOAD %c318
   TAILCALL 2
-.func add/2#75 a b
+.func add/2#72 a b
   LOAD +
   LOAD a
   LOAD b
   TAILCALL 2
-.func add#76 %c126
-  CLOSURE lambda#77
+.func add#73 %c319
+  CLOSURE lambda#74
   RET
-.func lambda#77 %c127
+.func lambda#74 %c320
   LOAD add/2
-  LOAD %c126
-  LOAD %c127
+  LOAD %c319
+  LOAD %c320
   TAILCALL 2
-.func inc#78 %p128
+.func inc#75 %p321
   LOAD add/2
   CONST 1
-  LOAD %p128
+  LOAD %p321
   TAILCALL 2
-.func double#79 x
+.func double#76 x
   LOAD *
   LOAD x
   CONST 2
   TAILCALL 2
-.func lambda#80 %p130
+.func lambda#77 %p323
   LOAD >>/3
   LOAD double
   LOAD inc
-  LOAD %p130
+  LOAD %p323
   TAILCALL 3
-.func lambda#81 %g131
-  CLOSURE lambda#82
+.func lambda#78 %g324
+  CLOSURE lambda#79
   RET
-.func lambda#82 %p132
+.func lambda#79 %p325
   LOAD ml/List.filter/2
-  LOAD %g131
-  LOAD %p132
+  LOAD %g324
+  LOAD %p325
   TAILCALL 2
-.func lambda#83 x
+.func lambda#80 x
   LOAD =
   LOAD remainder
   LOAD x
@@ -1363,37 +1330,75 @@ L33:
   CALL 2
   CONST 1
   TAILCALL 2
-.func lambda#84 %g133
-  CLOSURE lambda#85
+.func lambda#81 %g326
+  CLOSURE lambda#82
   RET
-.func lambda#85 %p134
+.func lambda#82 %p327
   LOAD ml/List.map/2
-  LOAD %g133
-  LOAD %p134
+  LOAD %g326
+  LOAD %p327
   TAILCALL 2
-.func lambda#86 x
+.func lambda#83 x
   LOAD *
   LOAD x
   LOAD x
   TAILCALL 2
-.func lambda#87 %g137
-  CLOSURE lambda#88
+.func lambda#84 %g330
+  CLOSURE lambda#85
   RET
-.func lambda#88 %p138
+.func lambda#85 %p331
   LOAD ml/List.fold_left/3
-  LOAD %g137
+  LOAD %g330
   CONST 0
-  LOAD %p138
+  LOAD %p331
   TAILCALL 3
-.func lambda#89 %x135
-  CLOSURE lambda#90
+.func lambda#86 %x328
+  CLOSURE lambda#87
   RET
-.func lambda#90 %x136
+.func lambda#87 %x329
   LOAD +
-  LOAD %x135
-  LOAD %x136
+  LOAD %x328
+  LOAD %x329
   TAILCALL 2
-.func my_map#91 f
+.func my_map#88 f
+  CLOSURE lambda#89
+  RET
+.func lambda#89 %arg
+  LOAD null?
+  LOAD %arg
+  CALL 1
+  JF L32
+  CONST null
+  RET
+L32:
+  LOAD pair?
+  LOAD %arg
+  CALL 1
+  JF L33
+  CLOSURE lambda#90
+  LOAD car
+  LOAD %arg
+  CALL 1
+  LOAD cdr
+  LOAD %arg
+  CALL 1
+  TAILCALL 2
+L33:
+  LOAD error
+  CONST "Match_failure"
+  TAILCALL 1
+.func lambda#90 x xs
+  LOAD cons
+  LOAD f
+  LOAD x
+  CALL 1
+  LOAD my_map
+  LOAD f
+  CALL 1
+  LOAD xs
+  CALL 1
+  TAILCALL 2
+.func my_filter#91 p
   CLOSURE lambda#92
   RET
 .func lambda#92 %arg
@@ -1421,31 +1426,39 @@ L35:
   CONST "Match_failure"
   TAILCALL 1
 .func lambda#93 x xs
-  LOAD cons
-  LOAD f
+  LOAD p
   LOAD x
   CALL 1
-  LOAD my_map
-  LOAD f
+  JF L36
+  LOAD cons
+  LOAD x
+  LOAD my_filter
+  LOAD p
   CALL 1
   LOAD xs
   CALL 1
   TAILCALL 2
-.func my_filter#94 p
+L36:
+  LOAD my_filter
+  LOAD p
+  CALL 1
+  LOAD xs
+  TAILCALL 1
+.func my_fold/2#94 f acc
   CLOSURE lambda#95
   RET
 .func lambda#95 %arg
   LOAD null?
   LOAD %arg
   CALL 1
-  JF L36
-  CONST null
+  JF L37
+  LOAD acc
   RET
-L36:
+L37:
   LOAD pair?
   LOAD %arg
   CALL 1
-  JF L37
+  JF L38
   CLOSURE lambda#96
   LOAD car
   LOAD %arg
@@ -1454,57 +1467,11 @@ L36:
   LOAD %arg
   CALL 1
   TAILCALL 2
-L37:
+L38:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
 .func lambda#96 x xs
-  LOAD p
-  LOAD x
-  CALL 1
-  JF L38
-  LOAD cons
-  LOAD x
-  LOAD my_filter
-  LOAD p
-  CALL 1
-  LOAD xs
-  CALL 1
-  TAILCALL 2
-L38:
-  LOAD my_filter
-  LOAD p
-  CALL 1
-  LOAD xs
-  TAILCALL 1
-.func my_fold/2#97 f acc
-  CLOSURE lambda#98
-  RET
-.func lambda#98 %arg
-  LOAD null?
-  LOAD %arg
-  CALL 1
-  JF L39
-  LOAD acc
-  RET
-L39:
-  LOAD pair?
-  LOAD %arg
-  CALL 1
-  JF L40
-  CLOSURE lambda#99
-  LOAD car
-  LOAD %arg
-  CALL 1
-  LOAD cdr
-  LOAD %arg
-  CALL 1
-  TAILCALL 2
-L40:
-  LOAD error
-  CONST "Match_failure"
-  TAILCALL 1
-.func lambda#99 x xs
   LOAD my_fold/2
   LOAD f
   LOAD f
@@ -1515,15 +1482,15 @@ L40:
   CALL 2
   LOAD xs
   TAILCALL 1
-.func my_fold#100 %c140
-  CLOSURE lambda#101
+.func my_fold#97 %c333
+  CLOSURE lambda#98
   RET
-.func lambda#101 %c141
+.func lambda#98 %c334
   LOAD my_fold/2
-  LOAD %c140
-  LOAD %c141
+  LOAD %c333
+  LOAD %c334
   TAILCALL 2
-.func show_list#102 l
+.func show_list#99 l
   LOAD string-append
   CONST "["
   LOAD string-append
@@ -1537,42 +1504,42 @@ L40:
   CONST "]"
   CALL 2
   TAILCALL 2
-.func lambda#103 x
+.func lambda#100 x
   LOAD +
   LOAD x
   CONST 100
   TAILCALL 2
-.func lambda#104 x
+.func lambda#101 x
   LOAD >
   LOAD x
   CONST 2
   TAILCALL 2
-.func lambda#105 a
-  CLOSURE lambda#106
+.func lambda#102 a
+  CLOSURE lambda#103
   RET
-.func lambda#106 b
+.func lambda#103 b
   LOAD *
   LOAD a
   LOAD b
   TAILCALL 2
-.func make_adder#107 n
-  CLOSURE lambda#108
+.func make_adder#104 n
+  CLOSURE lambda#105
   RET
-.func lambda#108 x
+.func lambda#105 x
   LOAD +
   LOAD x
   LOAD n
   TAILCALL 2
-.func make_counter#109 %a146
-  CLOSURE lambda#110
+.func make_counter#106 %a339
+  CLOSURE lambda#107
   LOAD ml/ref
   CONST 0
   CALL 1
   TAILCALL 1
-.func lambda#110 c
-  CLOSURE lambda#111
+.func lambda#107 c
+  CLOSURE lambda#108
   RET
-.func lambda#111 %a147
+.func lambda#108 %a340
   LOAD ml/assign
   LOAD c
   LOAD +
@@ -1586,25 +1553,25 @@ L40:
   LOAD ml/deref
   LOAD c
   TAILCALL 1
-.func lambda#112 cache
-  CLOSURE lambda#113
+.func lambda#109 cache
+  CLOSURE lambda#110
   TAILCALL 0
-.func lambda#113
-  CLOSURE fib#114
+.func lambda#110
+  CLOSURE fib#111
   DEF fib
   POP
   LOAD fib
   RET
-.func fib#114 n
+.func fib#111 n
   LOAD <
   LOAD n
   CONST 2
   CALL 2
-  JF L41
+  JF L39
   LOAD n
   RET
-L41:
-  CLOSURE lambda#115
+L39:
+  CLOSURE lambda#112
   LOAD ml/List.assoc_opt/2
   LOAD n
   LOAD ml/deref
@@ -1612,28 +1579,28 @@ L41:
   CALL 1
   CALL 2
   TAILCALL 1
-.func lambda#115 %m151
+.func lambda#112 %m344
   LOAD eq?
   LOAD car
-  LOAD %m151
+  LOAD %m344
   CALL 1
   CONST {"sym":"Some"}
   CALL 2
-  JF L42
-  CLOSURE lambda#116
+  JF L40
+  CLOSURE lambda#113
   LOAD cadr
-  LOAD %m151
+  LOAD %m344
   CALL 1
   TAILCALL 1
-L42:
+L40:
   LOAD eq?
   LOAD car
-  LOAD %m151
+  LOAD %m344
   CALL 1
   CONST {"sym":"None"}
   CALL 2
-  JF L43
-  CLOSURE lambda#117
+  JF L41
+  CLOSURE lambda#114
   LOAD +
   LOAD fib
   LOAD -
@@ -1649,14 +1616,14 @@ L42:
   CALL 1
   CALL 2
   TAILCALL 1
-L43:
+L41:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#116 v
+.func lambda#113 v
   LOAD v
   RET
-.func lambda#117 v
+.func lambda#114 v
   LOAD ml/assign
   LOAD cache
   LOAD cons
@@ -1672,45 +1639,45 @@ L43:
   POP
   LOAD v
   RET
-.func even#118 n
+.func even#115 n
   LOAD =
   LOAD n
   CONST 0
   CALL 2
-  JF L44
+  JF L42
   CONST true
   RET
-L44:
+L42:
   LOAD odd
   LOAD -
   LOAD n
   CONST 1
   CALL 2
   TAILCALL 1
-.func odd#119 n
+.func odd#116 n
   LOAD =
   LOAD n
   CONST 0
   CALL 2
-  JF L45
+  JF L43
   CONST false
   RET
-L45:
+L43:
   LOAD even
   LOAD -
   LOAD n
   CONST 1
   CALL 2
   TAILCALL 1
-.func loop/2#120 i acc
+.func loop/2#117 i acc
   LOAD =
   LOAD i
   CONST 0
   CALL 2
-  JF L50
+  JF L48
   LOAD acc
   RET
-L50:
+L48:
   LOAD loop/2
   LOAD -
   LOAD i
@@ -1721,23 +1688,23 @@ L50:
   LOAD i
   CALL 2
   TAILCALL 2
-.func loop#121 %c154
-  CLOSURE lambda#122
+.func loop#118 %c347
+  CLOSURE lambda#119
   RET
-.func lambda#122 %c155
+.func lambda#119 %c348
   LOAD loop/2
-  LOAD %c154
-  LOAD %c155
+  LOAD %c347
+  LOAD %c348
   TAILCALL 2
-.func depth#123 n
+.func depth#120 n
   LOAD =
   LOAD n
   CONST 0
   CALL 2
-  JF L51
+  JF L49
   CONST 0
   RET
-L51:
+L49:
   LOAD +
   CONST 1
   LOAD depth
@@ -1747,29 +1714,29 @@ L51:
   CALL 2
   CALL 1
   TAILCALL 2
-.func sum_to#124 n
-  CLOSURE lambda#125
+.func sum_to#121 n
+  CLOSURE lambda#122
   TAILCALL 0
-.func lambda#125
-  CLOSURE go/2#126
+.func lambda#122
+  CLOSURE go/2#123
   DEF go/2
   POP
-  CLOSURE go#127
+  CLOSURE go#124
   DEF go
   POP
   LOAD go/2
   CONST 1
   CONST 0
   TAILCALL 2
-.func go/2#126 i acc
+.func go/2#123 i acc
   LOAD >
   LOAD i
   LOAD n
   CALL 2
-  JF L52
+  JF L50
   LOAD acc
   RET
-L52:
+L50:
   LOAD go/2
   LOAD +
   LOAD i
@@ -1780,27 +1747,27 @@ L52:
   LOAD i
   CALL 2
   TAILCALL 2
-.func go#127 %c158
-  CLOSURE lambda#128
+.func go#124 %c351
+  CLOSURE lambda#125
   RET
-.func lambda#128 %c159
+.func lambda#125 %c352
   LOAD go/2
-  LOAD %c158
-  LOAD %c159
+  LOAD %c351
+  LOAD %c352
   TAILCALL 2
-.func qsort#129 %arg
+.func qsort#126 %arg
   LOAD null?
   LOAD %arg
   CALL 1
-  JF L53
+  JF L51
   CONST null
   RET
-L53:
+L51:
   LOAD pair?
   LOAD %arg
   CALL 1
-  JF L54
-  CLOSURE lambda#130
+  JF L52
+  CLOSURE lambda#127
   LOAD car
   LOAD %arg
   CALL 1
@@ -1808,25 +1775,25 @@ L53:
   LOAD %arg
   CALL 1
   TAILCALL 2
-L54:
+L52:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#130 p rest
+.func lambda#127 p rest
+  CLOSURE lambda#128
+  LOAD ml/List.filter/2
   CLOSURE lambda#131
-  LOAD ml/List.filter/2
-  CLOSURE lambda#134
   LOAD rest
   CALL 2
   TAILCALL 1
-.func lambda#131 smaller
-  CLOSURE lambda#132
+.func lambda#128 smaller
+  CLOSURE lambda#129
   LOAD ml/List.filter/2
-  CLOSURE lambda#133
+  CLOSURE lambda#130
   LOAD rest
   CALL 2
   TAILCALL 1
-.func lambda#132 larger
+.func lambda#129 larger
   LOAD append
   LOAD qsort
   LOAD smaller
@@ -1840,37 +1807,45 @@ L54:
   CALL 1
   CALL 2
   TAILCALL 2
-.func lambda#133 x
+.func lambda#130 x
   LOAD >=
   LOAD x
   LOAD p
   TAILCALL 2
-.func lambda#134 x
+.func lambda#131 x
   LOAD <
   LOAD x
   LOAD p
   TAILCALL 2
-.func lambda#135 a
-  CLOSURE lambda#136
+.func lambda#132 %x356
+  CLOSURE lambda#133
   RET
-.func lambda#136 b
-  LOAD ml/compare/2
+.func lambda#133 %x357
+  LOAD compare
+  LOAD %x356
+  LOAD %x357
+  TAILCALL 2
+.func lambda#134 a
+  CLOSURE lambda#135
+  RET
+.func lambda#135 b
+  LOAD compare
   LOAD b
   LOAD a
   TAILCALL 2
-.func sieve#137 %arg
+.func sieve#136 %arg
   LOAD null?
   LOAD %arg
   CALL 1
-  JF L55
+  JF L53
   CONST null
   RET
-L55:
+L53:
   LOAD pair?
   LOAD %arg
   CALL 1
-  JF L56
-  CLOSURE lambda#138
+  JF L54
+  CLOSURE lambda#137
   LOAD car
   LOAD %arg
   CALL 1
@@ -1878,21 +1853,21 @@ L55:
   LOAD %arg
   CALL 1
   TAILCALL 2
-L56:
+L54:
   LOAD error
   CONST "Match_failure"
   TAILCALL 1
-.func lambda#138 p xs
+.func lambda#137 p xs
   LOAD cons
   LOAD p
   LOAD sieve
   LOAD ml/List.filter/2
-  CLOSURE lambda#139
+  CLOSURE lambda#138
   LOAD xs
   CALL 2
   CALL 1
   TAILCALL 2
-.func lambda#139 x
+.func lambda#138 x
   LOAD not
   LOAD =
   LOAD remainder
@@ -1902,37 +1877,37 @@ L56:
   CONST 0
   CALL 2
   TAILCALL 1
-.func lambda#140 i
+.func lambda#139 i
   LOAD +
   LOAD i
   CONST 2
   TAILCALL 2
-.func collatz#141 n
-  CLOSURE lambda#142
+.func collatz#140 n
+  CLOSURE lambda#141
   LOAD ml/ref
   CONST 0
   CALL 1
   TAILCALL 1
-.func lambda#142 steps
-  CLOSURE lambda#143
+.func lambda#141 steps
+  CLOSURE lambda#142
   LOAD ml/ref
   LOAD n
   CALL 1
   TAILCALL 1
-.func lambda#143 cur
-  CLOSURE lambda#144
+.func lambda#142 cur
+  CLOSURE lambda#143
   CALL 0
   POP
   LOAD ml/deref
   LOAD steps
   TAILCALL 1
-.func lambda#144
-  CLOSURE %loop165#145
-  DEF %loop165
+.func lambda#143
+  CLOSURE %loop360#144
+  DEF %loop360
   POP
-  LOAD %loop165
+  LOAD %loop360
   TAILCALL 0
-.func %loop165#145
+.func %loop360#144
   LOAD not
   LOAD =
   LOAD ml/deref
@@ -1941,7 +1916,7 @@ L56:
   CONST 1
   CALL 2
   CALL 1
-  JF L57
+  JF L55
   LOAD ml/assign
   LOAD cur
   LOAD =
@@ -1953,15 +1928,15 @@ L56:
   CALL 2
   CONST 0
   CALL 2
-  JF L58
+  JF L56
   LOAD quotient
   LOAD ml/deref
   LOAD cur
   CALL 1
   CONST 2
   CALL 2
-  JMP L59
-L58:
+  JMP L57
+L56:
   LOAD +
   LOAD *
   CONST 3
@@ -1971,48 +1946,48 @@ L58:
   CALL 2
   CONST 1
   CALL 2
-L59:
+L57:
   CALL 2
   POP
   LOAD ml/incr
   LOAD steps
   CALL 1
   POP
-  LOAD %loop165
+  LOAD %loop360
   TAILCALL 0
-L57:
+L55:
   CONST null
   RET
-.func sum_squares#146 n
-  CLOSURE lambda#147
+.func sum_squares#145 n
+  CLOSURE lambda#146
   LOAD ml/ref
   CONST 0
   CALL 1
   TAILCALL 1
-.func lambda#147 total
-  CLOSURE lambda#148
+.func lambda#146 total
+  CLOSURE lambda#147
   LOAD n
   CALL 1
   POP
   LOAD ml/deref
   LOAD total
   TAILCALL 1
-.func lambda#148 %hi168
-  CLOSURE lambda#149
+.func lambda#147 %hi363
+  CLOSURE lambda#148
   TAILCALL 0
-.func lambda#149
-  CLOSURE %loop167#150
-  DEF %loop167
+.func lambda#148
+  CLOSURE %loop362#149
+  DEF %loop362
   POP
-  LOAD %loop167
+  LOAD %loop362
   CONST 1
   TAILCALL 1
-.func %loop167#150 i
+.func %loop362#149 i
   LOAD <=
   LOAD i
-  LOAD %hi168
+  LOAD %hi363
   CALL 2
-  JF L60
+  JF L58
   LOAD ml/assign
   LOAD total
   LOAD +
@@ -2026,31 +2001,31 @@ L57:
   CALL 2
   CALL 2
   POP
-  LOAD %loop167
+  LOAD %loop362
   LOAD +
   LOAD i
   CONST 1
   CALL 2
   TAILCALL 1
-L60:
+L58:
   CONST null
   RET
-.func lambda#151 %hi172
-  CLOSURE lambda#152
+.func lambda#150 %hi367
+  CLOSURE lambda#151
   TAILCALL 0
-.func lambda#152
-  CLOSURE %loop171#153
-  DEF %loop171
+.func lambda#151
+  CLOSURE %loop366#152
+  DEF %loop366
   POP
-  LOAD %loop171
+  LOAD %loop366
   CONST 3
   TAILCALL 1
-.func %loop171#153 i
+.func %loop366#152 i
   LOAD >=
   LOAD i
-  LOAD %hi172
+  LOAD %hi367
   CALL 2
-  JF L61
+  JF L59
   LOAD display
   LOAD string-append
   LOAD number->string
@@ -2062,78 +2037,78 @@ L60:
   POP
   CONST null
   POP
-  LOAD %loop171
+  LOAD %loop366
   LOAD -
   LOAD i
   CONST 1
   CALL 2
   TAILCALL 1
-L61:
+L59:
   CONST null
   RET
-.func pair_up/2#154 a b
+.func pair_up/2#153 a b
   LOAD list
   LOAD a
   LOAD b
   TAILCALL 2
-.func pair_up#155 %c173
-  CLOSURE lambda#156
+.func pair_up#154 %c368
+  CLOSURE lambda#155
   RET
-.func lambda#156 %c174
+.func lambda#155 %c369
   LOAD pair_up/2
-  LOAD %c173
-  LOAD %c174
+  LOAD %c368
+  LOAD %c369
   TAILCALL 2
-.func zip/2#157 a b
-  CLOSURE lambda#158
+.func zip/2#156 a b
+  CLOSURE lambda#157
   LOAD list
   LOAD a
   LOAD b
   CALL 2
   TAILCALL 1
-.func lambda#158 %m175
+.func lambda#157 %m370
   LOAD pair?
   LOAD car
-  LOAD %m175
+  LOAD %m370
   CALL 1
   CALL 1
-  JF L63
+  JF L61
   LOAD pair?
   LOAD cadr
-  LOAD %m175
+  LOAD %m370
   CALL 1
   CALL 1
-  JMP L64
-L63:
+  JMP L62
+L61:
   CONST false
-L64:
-  JF L62
-  CLOSURE lambda#159
+L62:
+  JF L60
+  CLOSURE lambda#158
   LOAD car
   LOAD car
-  LOAD %m175
+  LOAD %m370
   CALL 1
   CALL 1
   LOAD cdr
   LOAD car
-  LOAD %m175
+  LOAD %m370
   CALL 1
   CALL 1
   LOAD car
   LOAD cadr
-  LOAD %m175
+  LOAD %m370
   CALL 1
   CALL 1
   LOAD cdr
   LOAD cadr
-  LOAD %m175
+  LOAD %m370
   CALL 1
   CALL 1
   TAILCALL 4
-L62:
+L60:
   CONST null
   RET
-.func lambda#159 x xs y ys
+.func lambda#158 x xs y ys
   LOAD cons
   LOAD list
   LOAD x
@@ -2144,24 +2119,24 @@ L62:
   LOAD ys
   CALL 2
   TAILCALL 2
-.func zip#160 %c176
-  CLOSURE lambda#161
+.func zip#159 %c371
+  CLOSURE lambda#160
   RET
-.func lambda#161 %c177
+.func lambda#160 %c372
   LOAD zip/2
-  LOAD %c176
-  LOAD %c177
+  LOAD %c371
+  LOAD %c372
   TAILCALL 2
-.func lambda#162 %a179
-  CLOSURE lambda#163
+.func lambda#161 %a374
+  CLOSURE lambda#162
   LOAD car
-  LOAD %a179
+  LOAD %a374
   CALL 1
   LOAD cadr
-  LOAD %a179
+  LOAD %a374
   CALL 1
   TAILCALL 2
-.func lambda#163 n s
+.func lambda#162 n s
   LOAD display
   LOAD string-append
   LOAD number->string

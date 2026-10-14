@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * lispvm.js  —  執行 lispc.js 產生的中間碼 (.lbc)
- * 用法:  node lispvm.js program.lbc
+ * vm.js  —  執行 lispc.js 產生的中間碼 (.lbc)
+ * 用法:  node vm.js program.lbc
  * 指令集與格式請見 lispc.js 檔頭註解。
  */
 const fs = require('fs');
@@ -12,6 +12,7 @@ class Sym { constructor(n) { this.name = n; } }
 const symtab = new Map();
 const intern = n => { let s = symtab.get(n); if (!s) symtab.set(n, s = new Sym(n)); return s; };
 class Pair { constructor(car, cdr) { this.car = car; this.cdr = cdr; } }   // 空串列 = null
+class Vec { constructor(a) { this.a = a; } }              // 'a array / bytes 底層 (bytes 以 Vec<int> 表示字元碼)
 const VOID = { void: true };
 class Closure { constructor(fn, env) { this.fn = fn; this.env = env; } }
 class Env {
@@ -43,14 +44,80 @@ function toStr(v, write) {
     for (; p instanceof Pair; p = p.cdr) parts.push(toStr(p.car, write));
     return '(' + parts.join(' ') + (p === null ? '' : ' . ' + toStr(p, write)) + ')';
   }
+  if (v instanceof Vec) return '[|' + v.a.map(x => toStr(x, write)).join('; ') + '|]';
   return String(v);
 }
-const equal = (a, b) =>
-  a instanceof Pair && b instanceof Pair ? equal(a.car, b.car) && equal(a.cdr, b.cdr) : a === b;
+const equal = (a, b) => {
+  if (a instanceof Pair && b instanceof Pair) return equal(a.car, b.car) && equal(a.cdr, b.cdr);
+  if (a instanceof Vec && b instanceof Vec)
+    return a.a.length === b.a.length && a.a.every((x, i) => equal(x, b.a[i]));
+  return a === b;
+};
+/* 結構比較: 數字 < 字串(char 視為 1 字元字串) < 符號 < 空串列 < 布林 < pair/list < Vec */
+const cmpVal = (a, b) => {
+  const rank = v =>
+    typeof v === 'number' ? 0 : typeof v === 'string' ? 1 : v instanceof Sym ? 2 : v === null ? 3
+    : typeof v === 'boolean' ? 4 : v instanceof Pair ? 5 : v instanceof Vec ? 6 : -1;
+  const ra = rank(a), rb = rank(b);
+  if (ra < 0 || rb < 0) throw new Error('compare: 不支援函式或 void 的比較');
+  if (ra !== rb) return ra < rb ? -1 : 1;
+  switch (ra) {
+    case 0: return a < b ? -1 : a > b ? 1 : 0;
+    case 1: return a < b ? -1 : a > b ? 1 : 0;
+    case 2: return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+    case 3: return 0;
+    case 4: return a === b ? 0 : a === false ? -1 : 1;
+    case 5: { const c = cmpVal(a.car, b.car); return c !== 0 ? c : cmpVal(a.cdr, b.cdr); }
+    case 6: {
+      if (a.a.length !== b.a.length) return a.a.length < b.a.length ? -1 : 1;
+      for (let i = 0; i < a.a.length; i++) { const c = cmpVal(a.a[i], b.a[i]); if (c !== 0) return c; }
+      return 0;
+    }
+  }
+  return 0;
+};
+/* 結構雜湊 (與 vm2wasm.js 的 hash 演算法相同，確保兩邊輸出一致) */
+const hashVal = v => {
+  const mix = h => ((h | 0) * 31 | 0) & 0x3fffffff;
+  const strH = s => { let h = 0; for (let i = 0; i < s.length; i++) h = mix(h + s.charCodeAt(i)); return h; };
+  const go = (v, d) => {
+    if (typeof v === 'number') return mix(v | 0) ^ mix(Math.floor(Math.abs(v % 1) * 1e9));
+    if (typeof v === 'string') return strH('s' + v);
+    if (v instanceof Sym) return strH('k' + v.name);
+    if (v === null) return 0x1a2b3c;
+    if (v === true) return 0x111; if (v === false) return 0x222;
+    if (d <= 0) return 0x777;
+    if (v instanceof Pair) return mix(go(v.car, d - 1)) ^ (mix(go(v.cdr, d - 1)) + 0x9e37);
+    if (v instanceof Vec) { let h = v.a.length; for (const x of v.a) h = mix(h) ^ go(x, d - 1); return h; }
+    throw new Error('hash: 不支援函式或 void 的雜湊');
+  };
+  return go(v, 8);
+};
 
 /* ───────────── 內建函式 ───────────── */
 const num = (x, who) => { if (typeof x !== 'number') throw new Error(`${who}: 需要數字，得到 ${toStr(x, true)}`); return x; };
-const cmp = (name, f) => (...a) => { for (let i = 0; i < a.length - 1; i++) if (!f(num(a[i], name), num(a[i + 1], name))) return false; return true; };
+const int32 = (x, who) => num(x, who) | 0;
+const str = (x, who) => { if (typeof x !== 'string') throw new Error(`${who}: 需要字串，得到 ${toStr(x, true)}`); return x; };
+const chr1 = (x, who) => { if (typeof x !== 'string' || x.length !== 1) throw new Error(`${who}: 需要字元，得到 ${toStr(x, true)}`); return x; };
+const pair = (x, who) => { if (!(x instanceof Pair)) throw new Error(`${who}: 不是 pair: ` + toStr(x, true)); return x; };
+const vec = (x, who) => { if (!(x instanceof Vec)) throw new Error(`${who}: 不是陣列，得到 ${toStr(x, true)}`); return x; };
+const vecIdx = (v, i, who) => {
+  const n = num(i, who);
+  if (!Number.isInteger(n) || n < 0 || n >= v.a.length) throw new Error(`${who}: 索引超出範圍 ${toStr(i, true)} (長度 ${v.a.length})`);
+  return n;
+};
+/* 比較: 數字與數字、字串與字串可比 (字串為字典序)；混合型別報錯 */
+const cmp2 = (name, f) => (...a) => {
+  for (let i = 0; i < a.length - 1; i++) {
+    const x = a[i], y = a[i + 1];
+    const ok = typeof x === 'number' && typeof y === 'number' ? f(x, y)
+      : typeof x === 'string' && typeof y === 'string' ? f(x < y ? -1 : x > y ? 1 : 0, 0)
+      : null;
+    if (ok === null) throw new Error(`${name}: 需要兩個數字或兩個字串，得到 ${toStr(x, true)} 與 ${toStr(y, true)}`);
+    if (!ok) return false;
+  }
+  return true;
+};
 const out = s => process.stdout.write(s);
 
 const primitives = {
@@ -61,9 +128,43 @@ const primitives = {
   'quotient': (a, b) => Math.trunc(a / b),
   'remainder': (a, b) => a % b,
   'modulo': (a, b) => ((a % b) + b) % b,
-  '=': cmp('=', (a, b) => a === b), '<': cmp('<', (a, b) => a < b), '>': cmp('>', (a, b) => a > b),
-  '<=': cmp('<=', (a, b) => a <= b), '>=': cmp('>=', (a, b) => a >= b),
+  '=': cmp2('=', (a, b) => a === b), '<': cmp2('<', (a, b) => a < b), '>': cmp2('>', (a, b) => a > b),
+  '<=': cmp2('<=', (a, b) => a <= b), '>=': cmp2('>=', (a, b) => a >= b),
   'abs': Math.abs, 'min': Math.min, 'max': Math.max,
+  'sqrt': a => Math.sqrt(num(a, 'sqrt')), 'floor': a => Math.floor(num(a, 'floor')), 'ceil': a => Math.ceil(num(a, 'ceil')),
+  'sin': a => Math.sin(num(a, 'sin')), 'cos': a => Math.cos(num(a, 'cos')),
+  'atan2': (y, x) => Math.atan2(num(y, 'atan2'), num(x, 'atan2')),
+  'exp': a => Math.exp(num(a, 'exp')), 'log': a => Math.log(num(a, 'log')), 'pow': (a, b) => Math.pow(num(a, 'pow'), num(b, 'pow')),
+  'bit-and': (a, b) => int32(a, 'bit-and') & int32(b, 'bit-and'),
+  'bit-or': (a, b) => int32(a, 'bit-or') | int32(b, 'bit-or'),
+  'bit-xor': (a, b) => int32(a, 'bit-xor') ^ int32(b, 'bit-xor'),
+  'shift-left': (a, b) => int32(a, 'shift-left') << (int32(b, 'shift-left') & 31),
+  'shift-right': (a, b) => int32(a, 'shift-right') >> (int32(b, 'shift-right') & 31),
+  'shift-right-logical': (a, b) => int32(a, 'shift-right-logical') >>> (int32(b, 'shift-right-logical') & 31),
+  'compare': (a, b) => cmpVal(a, b),
+  'hash': a => hashVal(a),
+  'char-code': c => chr1(c, 'char-code').codePointAt(0),
+  'char-chr': n => {
+    n = num(n, 'char-chr');
+    if (!Number.isInteger(n) || n < 0 || n > 0x10ffff) throw new Error(`char-chr: 字元碼超出範圍 ${toStr(n, true)}`);
+    return String.fromCodePoint(n);
+  },
+  'string-get': (s, i) => {
+    s = str(s, 'string-get'); i = num(i, 'string-get');
+    if (!Number.isInteger(i) || i < 0 || i >= s.length) throw new Error(`string-get: 索引超出範圍 ${toStr(i, true)} (長度 ${s.length})`);
+    return s[i];
+  },
+  'vector': (...a) => new Vec(a),
+  'make-vector': (n, x) => {
+    n = num(n, 'make-vector');
+    if (!Number.isInteger(n) || n < 0) throw new Error(`make-vector: 長度錯誤 ${toStr(n, true)}`);
+    return new Vec(Array(n).fill(x));
+  },
+  'vector-length': v => vec(v, 'vector-length').a.length,
+  'vector-ref': (v, i) => { v = vec(v, 'vector-ref'); return v.a[vecIdx(v, i, 'vector-ref')]; },
+  'vector-set!': (v, i, x) => { v = vec(v, 'vector-set!'); v.a[vecIdx(v, i, 'vector-set!')] = x; return VOID; },
+  'set-car!': (p, x) => { pair(p, 'set-car!').car = x; return VOID; },
+  'set-cdr!': (p, x) => { pair(p, 'set-cdr!').cdr = x; return VOID; },
   'zero?': a => a === 0, 'even?': a => a % 2 === 0, 'odd?': a => Math.abs(a % 2) === 1,
   'not': a => a === false,
   'eq?': (a, b) => a === b, 'eqv?': (a, b) => a === b, 'equal?': equal,
@@ -197,7 +298,7 @@ module.exports = { load, run, execute, toStr };
 
 /* ───────────── CLI ───────────── */
 if (require.main === module) {
-  if (process.argv.length < 3) { console.error('用法: node lispvm.js program.lbc'); process.exit(1); }
+  if (process.argv.length < 3) { console.error('用法: node vm.js program.lbc'); process.exit(1); }
   try { execute(fs.readFileSync(process.argv[2], 'utf8')); }
   catch (e) { console.error('執行錯誤: ' + e.message); process.exit(1); }
 }

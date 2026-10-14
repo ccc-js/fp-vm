@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * lambdac.js  —  Lambda Calculus  ->  LBC v1 中間碼 (與 lispc.js 相同格式，用 lispvm.js 執行)
+ * lambdac.js  —  Lambda Calculus  ->  LBC v1 中間碼 (與 lispc.js 相同格式，用 vm.js 執行)
  *
  * 用法:  node lambdac.js input.lc [-o output.lbc]      (-o - 輸出到 stdout)
- *        node lispvm.js output.lbc
+ *        node vm.js output.lbc
  *
  * ───────────────────────────── 語法 ─────────────────────────────
  *  程式    := 項目 ( ";" 項目 )* [";"]            -- 註解以 -- 開頭

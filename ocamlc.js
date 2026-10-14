@@ -3,7 +3,7 @@
 /*
  * mlc.js  —  迷你 ML (OCaml 風格)  ->  LBC v1 中間碼
  *
- * 用法:  node mlc.js prog.ml [-o prog.lbc]     產生 prog.lbc，用 lispvm.js / vm2wasm.js 執行
+ * 用法:  node mlc.js prog.ml [-o prog.lbc]     產生 prog.lbc，用 vm.js / vm2wasm.js 執行
  *        node mlc.js prog.ml --types           只做型別檢查，並印出每個頂層定義的型別
  *        node mlc.js prog.ml --scheme          印出中間產物 (Scheme 核心)
  *        node mlc.js prog.ml --no-check        略過型別檢查
@@ -12,30 +12,37 @@
  *
  * ────────────── 支援的語言 ──────────────
  *  運算式   let / let rec / and / in、fun、function、match … with (含 when 守衛)、if、tuple、list [a; b]、
+ *           array [|a; b|] / a.(i) / a.(i) <- v、char 字面值 'a' '\n' '\65' '\x41'、
  *           binding operators: let* let+ and* and+ (monad 的 do 記法，需自行定義 ( let* ) 等)、
- *           (e : t)、begin…end、序列 e1; e2、while / for、record {x = 1; y = 2} / {r with x = 3} / r.x
- *  樣式     變數 _ 字面值 tuple [] [a; b] h :: t Constructor (p, q) {x = p} p as x p1 | p2 (p : t)
- *  型別     type 'a t = A | B of 'a * int | …、record、type alias、型別推論 (let 多型 + value restriction)
- *  運算子   + - * / mod、+. -. *. /.、^、@、::、= <> < > <= >= ==、&& ||、:=、!、|>、@@ (可自訂運算子)
+ *           (e : t)、begin…end、序列 e1; e2、while / for、record {x = 1; y = 2} / {r with x = 3} / r.x / r.x <- v、
+ *           mutable record 欄位
+ *  樣式     變數 _ 字面值 (含 char) tuple [] [a; b] h :: t Constructor (p, q) {x = p} p as x p1 | p2 (可綁定相同變數) (p : t)
+ *  型別     char / bytes / 'a array (內建，不可變參數視為不變)、type 'a t = A | B of 'a * int | …、
+ *           record (含 mutable)、type alias、型別推論 (let 多型 + value restriction)
+ *  運算子   + - * / mod、land lor lxor lsl lsr asr、+. -. *. /. **、^、@、::、= <> < > <= >= ==、&& ||、:=、!、|>、@@ (可自訂運算子)
  *  module    module M = struct ... end、巢狀 module、module type S = sig ... end、簽章標註 (M : S)、
  *            抽象型別 (封裝)、with type 'a t = ...、open / include / let open M in e / M.(e)、
  *            functor: module F (X : S) = struct ... end、F (A)、F (struct ... end)、F ()、多參數 functor、結果簽章
  *  型別系統 Hindley-Milner 推論 + let 多型 + 放寬版 value restriction (協變位置的型別變數仍可泛化，與 OCaml 相同)
- *  函式庫   List.* Option.* Result.* String.length/concat、print_string/int/float/endline、string_of_*、ref、
- *           Printf.printf / sprintf (%d %s %f %.2f %b %5d %-5s %05d %%)，皆以 ML 寫成 (見 PRELUDE)
+ *  函式庫   List.* Option.* Result.* String.* Bytes.* Array.* Hashtbl.* Seq.* Char.* Int.* Float.*、print_string/int/float/char/endline、
+ *           string_of_*、ref、compare (結構比較)、Printf.printf / sprintf (%d %s %f %b %c %x %X %o 及寬度/精度)，
+ *           多數以 ML 寫成 (見 PRELUDE)，底層原語見 vm.js / vm2wasm.js
  *
  * ────────────── 執行期資料表示 ──────────────
- *  int/float = 數字    bool = #t/#f    string = 字串    unit = ()
+ *  int/float = 數字    bool = #t/#f    string = 字串    char = 1 字元字串    unit = ()
  *  tuple = list        list = list     variant: C a b = (C a b)，無參數 C = (C)
- *  record = 欄位值的 list (依宣告順序)   ref = 以 closure 封裝的可變格
+ *  record = 欄位值的 list (依宣告順序，mutable 欄位以 set-car! 原地修改)
+ *  array/bytes底層 = 向量 (VM 原生 Vec)   ref = 以 closure 封裝的可變格
  *
  * ────────────── 與真正 OCaml 的差異 ──────────────
- *  - 沒有 exception / try (用 failwith)、沒有 array、沒有 char
+ *  - 沒有 exception / try (用 failwith；try/with 需 VM 異常堆疊，尚未實作)、沒有 lazy
+ *  - 位運算是 32 位語義 (JS 位元運算限制)；char 為 Unicode 碼位而非位元組 (0-0x10FFFF)
+ *  - String.length / String.get 以 UTF-16 單元計數；Printf %x 負數印號誌而非二補數
  *  - module: functor 以「套用時展開」實作 (generative)，functor 本體在套用時才會被型別檢查，且只對引數做簽章符合性檢查
  *    (本體看得到引數的所有成員)；不支援 let module、module rec、first-class module、functor 型別、module type of
- *  - 沒有 labeled / optional 參數、沒有 GADT / 多型變體 / object、record 欄位不可 mutable (請用 ref)
+ *  - 沒有 labeled / optional 參數 (標號函式庫如 String.starts_with 改為位置參數)、沒有 GADT / 多型變體 / object
  *  - 數字是 JS 的 double: int 超過 2^53 會失準；int 與 float 在執行期不分
- *  - < > <= >= 與 compare 只支援數字 (VM 無字串比較)；= 則是完整的結構相等
+ *  - Hashtbl.t 命名為全域 hashtbl 型別；Seq.t 以 seq_node 型別提供 (單元 -> 節點函式)
  */
 const fs = require('fs');
 const lispc = require('./lispc.js');
@@ -45,9 +52,11 @@ const fail = (line, msg) => { throw new MLError(line ? `第 ${line} 行: ${msg}`
 
 /* ═════════════════════════ Lexer ═════════════════════════ */
 const KEYWORDS = new Set(['let', 'rec', 'and', 'in', 'fun', 'function', 'match', 'with', 'if', 'then', 'else', 'type', 'of',
-  'begin', 'end', 'true', 'false', 'mod', 'external', 'when', 'as', 'while', 'for', 'do', 'done', 'to', 'downto',
+  'begin', 'end', 'true', 'false', 'mod', 'land', 'lor', 'lxor', 'lsl', 'lsr', 'asr', 'external', 'when', 'as', 'while', 'for', 'do', 'done', 'to', 'downto',
   'open', 'module', 'try', 'exception', 'mutable', 'lazy', 'class', 'object', 'functor', 'sig', 'struct', 'val', 'include']);
-const UNSUPPORTED_KW = new Set(['try', 'exception', 'mutable', 'lazy', 'class', 'object']);
+const UNSUPPORTED_KW = new Set(['try', 'exception', 'lazy', 'class', 'object']);
+const BITOP_KW = new Set(['mod', 'land', 'lor', 'lxor', 'lsl', 'lsr', 'asr']);
+const CHAR_ESCAPES = { n: 10, r: 13, t: 9, b: 8, '\\': 92, "'": 39, '"': 34, ' ': 32 };
 const OPCH = '!$%&*+-./:<=>?@^|~';
 
 function lex(src) {
@@ -87,9 +96,21 @@ function lex(src) {
       push(/[.eE]/.test(text) ? 'float' : 'int', Number(text)); i += m[0].length; continue;
     }
     if (c === "'") {
+      // char 字面值: 'a' '\n' '\\' '\'' '\65' '\x41' (優先於型別變數 'a —— 需有結尾引號才算 char)
+      m = /^'(?:\\([nrtb\\'" ]|x[0-9a-fA-F]{2}|\d{3})|([^\\']))'/u.exec(src.slice(i));
+      if (m) {
+        let code;
+        if (m[2] !== undefined) code = m[2].codePointAt(0);
+        else if (/^\d{3}$/.test(m[1])) {
+          code = parseInt(m[1], 10);
+          if (code > 255) fail(line, `char \\${m[1]} 超出範圍 (需 000-255)`);
+        } else if (m[1][0] === 'x') code = parseInt(m[1].slice(1), 16);
+        else code = CHAR_ESCAPES[m[1]];
+        push('char', code); i += m[0].length; continue;
+      }
       m = /^'([a-z_][A-Za-z0-9_']*)/.exec(src.slice(i));
       if (m && !m[0].endsWith("'") && src[i + m[0].length] !== "'") { push('tyvar', m[1]); i += m[0].length; continue; }
-      fail(line, '不支援 char 字面值');
+      fail(line, '錯誤的 char 或型別變數寫法');
     }
     if (/[A-Za-z_]/.test(c)) {
       const w = /^[A-Za-z_][A-Za-z0-9_']*/.exec(src.slice(i))[0];
@@ -139,13 +160,13 @@ function opLevel(op) {
   if (op[0] === '@' || op[0] === '^') return 3;
   if (op === '::') return 4;
   if (op[0] === '+' || op[0] === '-') return 5;
-  if (op === 'mod' || '*/%'.includes(op[0])) return 6;
-  if (op.startsWith('**')) return 7;
+  if (op === 'mod' || op === 'land' || op === 'lor' || op === 'lxor' || '*/%'.includes(op[0])) return 6;
+  if (op.startsWith('**') || op === 'lsl' || op === 'lsr' || op === 'asr') return 7;
   return -1;
 }
 const RIGHT_ASSOC = new Set([3, 4, 7]);
 const NON_OPERATOR_TOKENS = new Set(['(', ')', '[', ']', '{', '}', ',', ';', ';;', '|', '_', '->', ':', '.']);
-const isOperatorToken = t => (t.k === 'op' && !NON_OPERATOR_TOKENS.has(t.v)) || (t.k === 'kw' && t.v === 'mod') || t.k === 'bindop';
+const isOperatorToken = t => (t.k === 'op' && !NON_OPERATOR_TOKENS.has(t.v)) || (t.k === 'kw' && BITOP_KW.has(t.v)) || t.k === 'bindop';
 
 class Parser {
   constructor(toks) { this.t = toks; this.p = 0; }
@@ -157,6 +178,10 @@ class Parser {
   err(msg) { const t = this.peek(); fail(t.line, `${msg} (遇到 ${this.describe(t)})`); }
   expectOp(v) { if (!this.isOp(v)) this.err(`語法錯誤: 需要 "${v}"`); return this.next(); }
   expectKw(v) { if (!this.isKw(v)) this.err(`語法錯誤: 需要 "${v}"`); return this.next(); }
+  splitPipe() {                       // `[||]` 的 `||` 會被 lexer 合併，拆成兩個 `|` (僅陣列括號使用)
+    const t = this.peek();
+    if (t.k === 'op' && t.v === '||') this.t.splice(this.p, 1, { k: 'op', v: '|', line: t.line }, { k: 'op', v: '|', line: t.line });
+  }
   expectId() { const t = this.peek(); if (t.k !== 'id') this.err('語法錯誤: 需要識別字'); return this.next().v; }
 
   /* ── 頂層 ── */
@@ -247,9 +272,10 @@ class Parser {
     if (this.isOp('{')) {
       this.next(); const fields = [];
       while (!this.isOp('}')) {
-        if (this.isKw('mutable')) fail(this.peek().line, '不支援 mutable 欄位 (請用 ref)');
+        let mut = false;
+        if (this.isKw('mutable')) { this.next(); mut = true; }
         const fname = this.expectId(); this.expectOp(':');
-        fields.push({ name: fname, type: this.parseType() });
+        fields.push({ name: fname, type: this.parseType(), mut });
         if (this.isOp(';')) this.next(); else break;
       }
       this.expectOp('}');
@@ -385,7 +411,7 @@ class Parser {
   /* ── let 綁定 ── */
   startsPatAtom() {
     const t = this.peek();
-    if (['id', 'int', 'float', 'str', 'cid'].includes(t.k)) return true;
+    if (['id', 'int', 'float', 'str', 'char', 'cid'].includes(t.k)) return true;
     if (t.k === 'kw') return t.v === 'true' || t.v === 'false';
     return t.k === 'op' && ['(', '[', '{', '_'].includes(t.v);
   }
@@ -462,6 +488,7 @@ class Parser {
       case 'int': return { t: 'plit', kind: 'int', v: t.v, line };
       case 'float': return { t: 'plit', kind: 'float', v: t.v, line };
       case 'str': return { t: 'plit', kind: 'string', v: t.v, line };
+      case 'char': return { t: 'plit', kind: 'char', v: t.v, line };
       case 'cid': return { t: 'pcon', name: t.v, arg: null, line };
       case 'kw':
         if (t.v === 'true' || t.v === 'false') return { t: 'plit', kind: 'bool', v: t.v === 'true', line };
@@ -606,6 +633,12 @@ class Parser {
   parseAssign() {
     const l = this.parseTuple();
     if (this.isOp(':=')) { const line = this.next().line; return E('app', line, { f: E('var', line, { name: ':=' }), args: [l, this.parseAssign()] }); }
+    if (this.isOp('<-')) {
+      const line = this.next().line, v = this.parseAssign();
+      if (l.t === 'field') return E('fieldset', line, { e: l.e, name: l.name, v });
+      if (l.t === 'arrget') return E('arrset', line, { a: l.a, idx: l.idx, v });
+      fail(line, '`<-' + '` 只能用於 record 可變欄位 (r.f <- v) 或陣列元素 (a.(i) <- v)');
+    }
     return l;
   }
   parseTuple() {
@@ -617,10 +650,10 @@ class Parser {
   }
   binOp() {
     const t = this.peek();
-    if (t.k === 'op' && !['=', ',', ';', ';;', '|', '->', ':', '.', ':=', '_', '(', ')', '[', ']', '{', '}'].includes(t.v)) return t.v;
+    if (t.k === 'op' && !['=', ',', ';', ';;', '|', '->', ':', '.', ':=', '<-', '_', '(', ')', '[', ']', '{', '}'].includes(t.v)) return t.v;
     if (t.k === 'op' && t.v === '=') return '=';
     if (t.k === 'op' && t.v === '|') return null;
-    if (t.k === 'kw' && t.v === 'mod') return 'mod';
+    if (t.k === 'kw' && BITOP_KW.has(t.v)) return t.v;
     return null;
   }
   parseBin(level) {
@@ -652,7 +685,7 @@ class Parser {
   }
   startsAtom() {
     const t = this.peek();
-    if (['int', 'float', 'str', 'id', 'cid'].includes(t.k)) return true;
+    if (['int', 'float', 'str', 'char', 'id', 'cid'].includes(t.k)) return true;
     if (t.k === 'kw') return t.v === 'true' || t.v === 'false' || t.v === 'begin';
     return t.k === 'op' && ['(', '[', '{', '!'].includes(t.v);
   }
@@ -663,9 +696,15 @@ class Parser {
   }
   parsePostfix() {
     let e = this.parseAtom();
-    while (this.isOp('.') && this.peek(1).k === 'id') {
-      const line = this.next().line;
-      e = E('field', line, { e, name: this.next().v });
+    for (;;) {
+      if (this.isOp('.') && this.peek(1).k === 'id') {
+        const line = this.next().line;
+        e = E('field', line, { e, name: this.next().v });
+      } else if (this.isOp('.') && this.isOp('(', 1)) {
+        const line = this.next().line; this.next();
+        const idx = this.parseSeq(); this.expectOp(')');
+        e = E('arrget', line, { a: e, idx });
+      } else break;
     }
     return e;
   }
@@ -675,6 +714,7 @@ class Parser {
       case 'int': return lit('int', t.v, line);
       case 'float': return lit('float', t.v, line);
       case 'str': return lit('string', t.v, line);
+      case 'char': return lit('char', t.v, line);
       case 'id': return E('var', line, { name: t.v });
       case 'cid':
         if (this.isOp('.') && this.isOp('(', 1)) {                            // M.(expr): 局部 open
@@ -700,6 +740,18 @@ class Parser {
           this.expectOp(')'); return e;
         }
         if (t.v === '[') {
+          this.splitPipe();
+          if (this.isOp('|')) {                                    // [| a; b |] 陣列字面值
+            this.next();
+            const items = [];
+            if (!this.isOp('|')) {
+              items.push(this.parseExpr());
+              while (this.isOp(';')) { this.next(); if (this.isOp('|')) break; items.push(this.parseExpr()); }
+            }
+            this.splitPipe();
+            this.expectOp('|'); this.expectOp(']');
+            return E('array', line, { items });
+          }
           const items = [];
           if (!this.isOp(']')) { items.push(this.parseExpr()); while (this.isOp(';')) { this.next(); if (this.isOp(']')) break; items.push(this.parseExpr()); } }
           this.expectOp(']'); return E('list', line, { items });
@@ -730,10 +782,11 @@ let tvId = 0, curLevel = 0;
 const newVar = () => ({ tv: true, id: tvId++, level: curLevel, link: null });
 const gvar = () => ({ tv: true, id: tvId++, level: GENERIC, link: null });
 const con = (name, args = []) => ({ con: name, args });
-const T = { int: con('int'), float: con('float'), string: con('string'), bool: con('bool'), unit: con('unit') };
+const T = { int: con('int'), float: con('float'), string: con('string'), char: con('char'), bool: con('bool'), unit: con('unit') };
 const arrow = (a, b) => con('->', [a, b]);
 const tupleT = ts => con('*', ts);
 const listT = t => con('list', [t]);
+const arrayT = t => con('array', [t]);
 
 const prune = t => { while (t.tv && t.link) t = t.link; return t; };
 
@@ -842,9 +895,10 @@ const findField = (name, line) => { const fi = lookupField(name); if (!fi) fail(
 function defineVal(name, info) { const key = CUR.qual(name); GT.set(key, info); defineName('vals', name, key); return key; }
 function resetTypeState() {
   ROOT = new NS('', null); CUR = ROOT;
-  for (const b of ['int', 'float', 'string', 'bool', 'unit', 'list', 'ref']) defineName('types', b, b, true, ROOT);
-  TYPES = new Map([['int', { n: 0 }], ['float', { n: 0 }], ['string', { n: 0 }], ['bool', { n: 0 }], ['unit', { n: 0 }],
-    ['list', { n: 1, cov: [true] }], ['ref', { n: 1, cov: [false] }]]);      // cov: 各型別參數是否為協變
+  for (const b of ['int', 'float', 'string', 'char', 'bytes', 'bool', 'unit', 'list', 'array', 'ref']) defineName('types', b, b, true, ROOT);
+  TYPES = new Map([['int', { n: 0 }], ['float', { n: 0 }], ['string', { n: 0 }], ['char', { n: 0 }], ['bytes', { n: 0 }],
+    ['bool', { n: 0 }], ['unit', { n: 0 }],
+    ['list', { n: 1, cov: [true] }], ['array', { n: 1, cov: [false] }], ['ref', { n: 1, cov: [false] }]]);      // cov: 各型別參數是否為協變
   CONS = new Map(); FIELDS = new Map(); RECS = new Map(); GT = new Map();
 }
 const lookupT = (ch, name) => { for (let c = ch; c; c = c.parent) if (c.name === name) return c.info; return GT.get(resolvePath('vals', name)); };
@@ -870,7 +924,7 @@ function convType(te, vars, generic) {
 function declareTypes(defs) {
   for (const d of defs) {
     const key = CUR.qual(d.name);
-    if (CUR === ROOT && ['int', 'float', 'string', 'bool', 'unit', 'list', 'ref'].includes(d.name)) fail(d.line, `不能重新定義內建型別 ${d.name}`);
+    if (CUR === ROOT && ['int', 'float', 'string', 'char', 'bytes', 'bool', 'unit', 'list', 'array', 'ref'].includes(d.name)) fail(d.line, `不能重新定義內建型別 ${d.name}`);
     TYPES.set(key, { n: d.params.length });
     defineName('types', d.name, key);
   }
@@ -884,10 +938,10 @@ function declareTypes(defs) {
         defineName('cons', c.name, ckey);
       });
     } else if (d.kind === 'record') {
-      const fields = d.fields.map(f => ({ name: f.name, type: convType(f.type, vars, true) }));
+      const fields = d.fields.map(f => ({ name: f.name, type: convType(f.type, vars, true), mut: !!f.mut }));
       const rec = { name: key, params, fields, res: con(key, params) };
       RECS.set(key, rec);
-      fields.forEach((f, idx) => { const fkey = CUR.qual(f.name); FIELDS.set(fkey, { rec, idx, type: f.type }); defineName('fields', f.name, fkey); });
+      fields.forEach((f, idx) => { const fkey = CUR.qual(f.name); FIELDS.set(fkey, { rec, idx, type: f.type, mut: f.mut }); defineName('fields', f.name, fkey); });
     } else TYPES.get(key).alias = { params, type: convType(d.type, vars, true) };
   }
   // 變異性: 先假設所有參數都是協變，再反覆檢查建構子參數 / 欄位型別，把違反者降為不變
@@ -908,6 +962,8 @@ function declareTypes(defs) {
         if (i >= 0 && p !== 1 && entry.cov[i]) { entry.cov[i] = false; changed = true; }
       });
   }
+  for (const d of defs)                                            // 含 mutable 欄位的 record: 型別參數一律視為不變 (保守但正確)
+    if (d.kind === 'record' && d.fields.some(f => f.mut)) TYPES.get(CUR.qual(d.name)).cov.fill(false);
 }
 
 /* ═════════════════════════ 型別推論 ═════════════════════════ */
@@ -924,7 +980,7 @@ function unifyAt(actual, expected, node, what) {
 function isValue(e) {
   switch (e.t) {
     case 'lit': case 'var': case 'con': case 'fun': return true;
-    case 'tuple': case 'list': return e.items.every(isValue);
+    case 'tuple': case 'list': case 'array': return e.items.every(isValue);
     case 'app': return e.f.t === 'con' && e.args.every(isValue);
     case 'record': return e.fields.every(f => isValue(f.e));
     case 'ann': return isValue(e.e);
@@ -932,15 +988,15 @@ function isValue(e) {
   }
 }
 
-const specType = s => ({ d: T.int, s: T.string, f: T.float, b: T.bool })[s];
+const specType = s => ({ d: T.int, s: T.string, f: T.float, b: T.bool, c: T.char, x: T.int, X: T.int, o: T.int })[s];
 function parseFormat(fmt, line) {
   const pieces = []; const re = /%([-0]*)(\d*)(?:\.(\d+))?([a-zA-Z%])/g; let last = 0, m;
   while ((m = re.exec(fmt))) {
     if (m.index > last) pieces.push({ lit: fmt.slice(last, m.index) });
     let conv = m[4]; if (conv === 'i') conv = 'd';
     if (conv === '%') pieces.push({ lit: '%' });
-    else if ('dsfb'.includes(conv)) pieces.push({ spec: conv, left: m[1].includes('-'), zero: m[1].includes('0'), width: m[2] ? +m[2] : 0, prec: m[3] !== undefined ? +m[3] : null });
-    else fail(line, `Printf 不支援 %${m[4]} (支援 %d %s %f %b %%)`);
+    else if ('dsfbcxoX'.includes(conv)) pieces.push({ spec: conv, left: m[1].includes('-'), zero: m[1].includes('0'), width: m[2] ? +m[2] : 0, prec: m[3] !== undefined ? +m[3] : null });
+    else fail(line, `Printf 不支援 %${m[4]} (支援 %d %s %f %b %c %x %X %o %%)`);
     last = re.lastIndex;
   }
   if (last < fmt.length) pieces.push({ lit: fmt.slice(last) });
@@ -966,7 +1022,7 @@ function instRec(rec) {
 
 function infer(e, ch) {
   switch (e.t) {
-    case 'lit': return { int: T.int, float: T.float, string: T.string, bool: T.bool, unit: T.unit }[e.kind];
+    case 'lit': return { int: T.int, float: T.float, string: T.string, char: T.char, bool: T.bool, unit: T.unit }[e.kind];
     case 'var': {
       const info = lookupT(ch, e.name);
       if (!info && /^(let|and)[^\w]/.test(e.name)) fail(e.line, `未定義的 binding operator "${e.name}"，請先定義: let ( ${e.name} ) m f = ...`);
@@ -1069,6 +1125,32 @@ function infer(e, ch) {
       unifyAt(infer(e.e, ch), inst.res, e.e, `存取欄位 ${e.name}`);
       return inst.fields[fi.idx];
     }
+    case 'fieldset': {
+      const fi = findField(e.name, e.line);
+      if (!fi.mut) fail(e.line, `欄位 ${e.name} 不可變 (需在型別宣告標示 mutable)`);
+      const inst = instRec(fi.rec);
+      unifyAt(infer(e.e, ch), inst.res, e.e, `存取欄位 ${e.name}`);
+      unifyAt(infer(e.v, ch), inst.fields[fi.idx], e.v, `欄位 ${e.name} 的賦值型別不符`);
+      return T.unit;
+    }
+    case 'array': {
+      const et = newVar();
+      for (const x of e.items) unifyAt(infer(x, ch), et, x, 'array 的元素必須同型別');
+      return arrayT(et);
+    }
+    case 'arrget': {
+      const et = newVar();
+      unifyAt(infer(e.a, ch), arrayT(et), e.a, '陣列存取的對象必須是 array');
+      unifyAt(infer(e.idx, ch), T.int, e.idx, '陣列索引必須是 int');
+      return et;
+    }
+    case 'arrset': {
+      const et = newVar();
+      unifyAt(infer(e.a, ch), arrayT(et), e.a, '陣列存取的對象必須是 array');
+      unifyAt(infer(e.idx, ch), T.int, e.idx, '陣列索引必須是 int');
+      unifyAt(infer(e.v, ch), et, e.v, '陣列賦值的值型別不符');
+      return T.unit;
+    }
     case 'record': case 'update': {
       const first = findField(e.fields[0].name, e.line);
       const rec = first.rec, inst = instRec(rec), seen = new Set();
@@ -1097,7 +1179,7 @@ function inferPat(p, b) {
       const t = newVar(); b.set(p.name, { type: t }); return t;
     }
     case 'pwild': return newVar();
-    case 'plit': return { int: T.int, float: T.float, string: T.string, bool: T.bool, unit: T.unit }[p.kind];
+    case 'plit': return { int: T.int, float: T.float, string: T.string, char: T.char, bool: T.bool, unit: T.unit }[p.kind];
     case 'ptuple': return tupleT(p.items.map(x => inferPat(x, b)));
     case 'plist': {
       const et = newVar();
@@ -1128,10 +1210,16 @@ function inferPat(p, b) {
     }
     case 'por': {
       const t = newVar();
+      let names = null;
       for (const alt of p.alts) {
         const b2 = new Map();
         unifyAt(inferPat(alt, b2), t, alt, 'or 樣式的各選項必須同型別');
-        if (b2.size) fail(p.line, 'or 樣式 (p1 | p2) 中不可綁定變數');
+        const keys = [...b2.keys()].sort().join('\0');
+        if (names === null) { names = keys; for (const [n, info] of b2) b.set(n, { type: info.type }); }
+        else {
+          if (keys !== names) fail(p.line, 'or 樣式各選項綁定的變數必須相同');
+          for (const [n, info] of b2) unifyAt(info.type, b.get(n).type, alt, `or 樣式變數 ${n} 在各選項型別必須相同`);
+        }
       }
       return t;
     }
@@ -1198,7 +1286,11 @@ function checkItem(item) {
 class SStr { constructor(v) { this.v = v; } }
 const LBC_PRIMS = ['+', '*', '-', '/', 'quotient', 'remainder', 'modulo', '=', '<', '>', '<=', '>=', 'abs', 'min', 'max', 'zero?', 'even?',
   'odd?', 'not', 'eq?', 'eqv?', 'equal?', 'cons', 'car', 'cdr', 'cadr', 'cddr', 'caddr', 'list', 'length', 'append', 'reverse', 'null?',
-  'pair?', 'number?', 'string?', 'symbol?', 'procedure?', 'string-append', 'string-length', 'number->string', 'display', 'write', 'newline', 'error'];
+  'pair?', 'number?', 'string?', 'symbol?', 'procedure?', 'string-append', 'string-length', 'number->string', 'display', 'write', 'newline', 'error',
+  'sqrt', 'floor', 'ceil', 'sin', 'cos', 'atan2', 'exp', 'log', 'pow',
+  'bit-and', 'bit-or', 'bit-xor', 'shift-left', 'shift-right', 'shift-right-logical',
+  'compare', 'hash', 'char-code', 'char-chr', 'string-get',
+  'vector', 'make-vector', 'vector-length', 'vector-ref', 'vector-set!', 'set-car!', 'set-cdr!'];
 const SCHEME_KW = ['quote', 'if', 'define', 'set!', 'lambda', 'begin', 'let', 'let*', 'letrec', 'cond', 'and', 'or', 'when', 'unless', 'else'];
 const RESERVED = new Set([...LBC_PRIMS, ...SCHEME_KW]);
 const ident = n => { n = n.replace(/'/g, '_q'); return RESERVED.has(n) ? 'u/' + n : n; };
@@ -1245,6 +1337,7 @@ function patCompile(p, acc) {
       case 'plit':
         if (p.kind === 'unit') break;
         if (p.kind === 'bool') tests.push(['eq?', acc, p.v]);
+        else if (p.kind === 'char') tests.push(['equal?', acc, new SStr(String.fromCodePoint(p.v))]);
         else tests.push(['equal?', acc, p.kind === 'string' ? new SStr(p.v) : p.v]);
         break;
       case 'ptuple': p.items.forEach((x, i) => go(x, nth(acc, i))); break;
@@ -1287,6 +1380,8 @@ function prepParams(params, ch) {
 }
 
 function genMatch(scrut, arms, ch) {
+  const expand = pat => pat.t === 'por' ? pat.alts.flatMap(expand) : [pat];   // or 樣式(含綁定)展開為多個分支
+  arms = arms.flatMap(a => expand(a.pat).map(pat => ({ ...a, pat })));
   const sc = gen(scrut, ch), compiled = arms.map(a => ({ a, pc: null }));
   let v, pre = null;
   const armVars = new Set(); arms.forEach(a => { const pc = patCompile(a.pat, '%x'); pc.names.forEach(n => armVars.add(ident(n))); });
@@ -1372,6 +1467,10 @@ function genPrintf(kind, e, ch) {
     if (pc.spec === 'd') s = ['number->string', a];
     else if (pc.spec === 's') s = a;
     else if (pc.spec === 'b') s = ['if', a, new SStr('true'), new SStr('false')];
+    else if (pc.spec === 'c') s = a;
+    else if (pc.spec === 'x') s = [helper('__fmt_hex'), a];
+    else if (pc.spec === 'X') s = [helper('String.uppercase_ascii'), [helper('__fmt_hex'), a]];
+    else if (pc.spec === 'o') s = [helper('__fmt_oct'), a];
     else s = [helper('__fmt_float'), pc.prec === null ? 6 : pc.prec, a];
     if (pc.width) s = pc.left ? [helper('__pad_right'), pc.width, s] : [helper('__pad_left'), pc.width, new SStr(pc.zero ? '0' : ' '), s];
     codes.push(s);
@@ -1385,6 +1484,7 @@ function gen(e, ch) {
     case 'lit':
       if (e.kind === 'unit') return NIL_Q;
       if (e.kind === 'string') return new SStr(e.v);
+      if (e.kind === 'char') return new SStr(String.fromCodePoint(e.v));
       return e.v;
     case 'var': {
       const info = lookupC(ch, e.name);
@@ -1439,6 +1539,15 @@ function gen(e, ch) {
     case 'openin': { const prev = CUR; CUR = openScope(e.path, e.line); try { return gen(e.body, ch); } finally { CUR = prev; } }
     case 'tuple': return ['list', ...e.items.map(x => gen(x, ch))];
     case 'list': return e.items.length ? ['list', ...e.items.map(x => gen(x, ch))] : NIL_Q;
+    case 'array': return ['vector', ...e.items.map(x => gen(x, ch))];
+    case 'arrget': return ['vector-ref', gen(e.a, ch), gen(e.idx, ch)];
+    case 'arrset': return ['vector-set!', gen(e.a, ch), gen(e.idx, ch), gen(e.v, ch)];
+    case 'fieldset': {
+      const fi = findField(e.name, e.line);
+      let p = gen(e.e, ch);
+      for (let i = 0; i < fi.idx; i++) p = ['cdr', p];
+      return ['set-car!', p, gen(e.v, ch)];
+    }
     case 'seq': return ['begin', gen(e.a, ch), gen(e.b, ch)];
     case 'ann': return gen(e.e, ch);
     case 'and': return ['if', gen(e.a, ch), gen(e.b, ch), false];
@@ -1747,6 +1856,34 @@ external List.length : 'a list -> int = "length"
 external List.rev : 'a list -> 'a list = "reverse"
 external List.hd : 'a list -> 'a = "car"
 external List.tl : 'a list -> 'a list = "cdr"
+external compare : 'a -> 'a -> int = "compare"
+external Hashtbl.hash : 'a -> int = "hash"
+external (land) : int -> int -> int = "bit-and"
+external (lor) : int -> int -> int = "bit-or"
+external (lxor) : int -> int -> int = "bit-xor"
+external (lsl) : int -> int -> int = "shift-left"
+external (asr) : int -> int -> int = "shift-right"
+external (lsr) : int -> int -> int = "shift-right-logical"
+external ( ** ) : float -> float -> float = "pow"
+external sqrt : float -> float = "sqrt"
+external floor : float -> float = "floor"
+external ceil : float -> float = "ceil"
+external sin : float -> float = "sin"
+external cos : float -> float = "cos"
+external atan2 : float -> float -> float = "atan2"
+external exp : float -> float = "exp"
+external log : float -> float = "log"
+external Char.code : char -> int = "char-code"
+external Char.chr : int -> char = "char-chr"
+external String.get : string -> int -> char = "string-get"
+external Array.make : int -> 'a -> 'a array = "make-vector"
+external Array.length : 'a array -> int = "vector-length"
+external Array.get : 'a array -> int -> 'a = "vector-ref"
+external Array.set : 'a array -> int -> 'a -> unit = "vector-set!"
+external __bytes_make : int -> int -> bytes = "make-vector"
+external Bytes.length : bytes -> int = "vector-length"
+external __bytes_get : bytes -> int -> int = "vector-ref"
+external __bytes_set : bytes -> int -> int -> unit = "vector-set!"
 
 let ( <> ) a b = not (a = b)
 let ( != ) a b = not (a == b)
@@ -1757,7 +1894,6 @@ let incr r = r := !r + 1
 let decr r = r := !r - 1
 let succ n = n + 1
 let pred n = n - 1
-let compare a b = if a < b then -1 else if a = b then 0 else 1
 let invalid_arg s = failwith s
 let assert b = if b then () else failwith "Assertion failed"
 let print_endline s = print_string s; print_newline ()
@@ -1766,11 +1902,33 @@ let string_of_bool b = if b then "true" else "false"
 let string_of_float x =
   if float_of_int (int_of_float x) = x then string_of_int (int_of_float x) ^ "." else __number_to_string x
 let print_float x = print_string (string_of_float x)
-let floor x = let t = float_of_int (int_of_float x) in if t > x then t -. 1.0 else t
-let ceil x = let t = float_of_int (int_of_float x) in if t < x then t +. 1.0 else t
-let sqrt x =
-  if x <= 0.0 then 0.0
-  else let rec go g n = if n = 0 then g else go ((g +. x /. g) /. 2.0) (n - 1) in go (x /. 2.0 +. 0.5) 60
+let string_of_char c = Printf.sprintf "%c" c
+let print_char c = print_string (string_of_char c)
+let mod_float a b = let q = int_of_float (a /. b) in a -. float_of_int q *. b
+let Float.pi = 3.141592653589793
+let Float.e = 2.718281828459045
+let Float.compare a b = compare a b
+let Float.is_nan x = x <> x
+let Int.compare a b = compare a b
+let Int.equal a b = a = b
+let Int.to_string = string_of_int
+let Char.compare a b = compare (Char.code a) (Char.code b)
+let Char.equal a b = a = b
+let Char.uppercase_ascii c =
+  let n = Char.code c in if n >= 97 && n <= 122 then Char.chr (n - 32) else c
+let Char.lowercase_ascii c =
+  let n = Char.code c in if n >= 65 && n <= 90 then Char.chr (n + 32) else c
+let int_of_string_opt s =
+  let n = String.length s in
+  let rec go i acc =
+    if i >= n then Some acc
+    else (let c = Char.code (String.get s i) in
+      if c >= 48 && c <= 57 then go (i + 1) (acc * 10 + (c - 48)) else None) in
+  if n = 0 then None
+  else if String.get s 0 = '-' then (match go 1 0 with Some v -> Some (-v) | None -> None)
+  else if String.get s 0 = '+' then go 1 0
+  else go 0 0
+let int_of_string s = match int_of_string_opt s with Some v -> v | None -> failwith "int_of_string"
 let Fun.id x = x
 let Fun.const a _ = a
 let Fun.flip f a b = f b a
@@ -1790,6 +1948,14 @@ let __fmt_float prec x =
     if prec = 0 then string_of_int r
     else string_of_int (r / s) ^ "." ^ __pad_left prec "0" (string_of_int (r mod s)) in
   if neg && r <> 0 then "-" ^ body else body
+let __fmt_digits = "0123456789abcdef"
+let rec __fmt_pos base x =
+  if x = 0 then ""
+  else __fmt_pos base (x / base) ^ string_of_char (String.get __fmt_digits (x mod base))
+let __fmt_hex n =
+  if n = 0 then "0" else if n < 0 then "-" ^ __fmt_pos 16 (-n) else __fmt_pos 16 n
+let __fmt_oct n =
+  if n = 0 then "0" else if n < 0 then "-" ^ __fmt_pos 8 (-n) else __fmt_pos 8 n
 
 (* List *)
 let rec List.map f l = match l with [] -> [] | x :: xs -> let y = f x in y :: List.map f xs
@@ -1871,8 +2037,123 @@ let Result.is_error r = match r with Ok _ -> false | Error _ -> true
 let Result.value r d = match r with Ok x -> x | Error _ -> d
 let Result.get_ok r = match r with Ok x -> x | Error _ -> failwith "Result.get_ok"
 let Result.to_option r = match r with Ok x -> Some x | Error _ -> None
+let Result.fold ok error r = match r with Ok x -> ok x | Error e -> error e
+let Option.filter p o = match o with Some x when p x -> Some x | _ -> None
 let rec String.concat sep l =
   match l with [] -> "" | [x] -> x | x :: xs -> x ^ sep ^ String.concat sep xs
+let String.make n c =
+  let s = string_of_char c in
+  let rec go i acc = if i <= 0 then acc else go (i - 1) (acc ^ s) in
+  if n < 0 then invalid_arg "String.make" else go n ""
+let String.init n f =
+  if n < 0 then invalid_arg "String.init"
+  else let rec go i acc = if i >= n then acc else go (i + 1) (acc ^ string_of_char (f i)) in go 0 ""
+let String.sub s pos len =
+  if pos < 0 || len < 0 || pos + len > String.length s then invalid_arg "String.sub"
+  else let rec go i acc = if i >= len then acc else go (i + 1) (acc ^ string_of_char (String.get s (pos + i))) in go 0 ""
+let String.split_on_char sep s =
+  let n = String.length s in
+  let rec go i j acc =
+    if j >= n then List.rev (String.sub s i (j - i) :: acc)
+    else if String.get s j = sep then go (j + 1) (j + 1) (String.sub s i (j - i) :: acc)
+    else go i (j + 1) acc in
+  go 0 0 []
+let String.starts_with prefix s =
+  let n = String.length prefix in
+  n <= String.length s && String.sub s 0 n = prefix
+let String.ends_with suffix s =
+  let n = String.length suffix and m = String.length s in
+  n <= m && String.sub s (m - n) n = suffix
+let String.contains s c =
+  let rec go i = i < String.length s && (String.get s i = c || go (i + 1)) in go 0
+let String.uppercase_ascii s = String.init (String.length s) (fun i -> Char.uppercase_ascii (String.get s i))
+let String.lowercase_ascii s = String.init (String.length s) (fun i -> Char.lowercase_ascii (String.get s i))
+let String.compare a b = compare a b
+let String.equal a b = a = b
+let String.of_char c = string_of_char c
+let Array.init n f =
+  if n < 0 then invalid_arg "Array.init"
+  else if n = 0 then [||]
+  else (let a = Array.make n (f 0) in (for i = 1 to n - 1 do a.(i) <- f i done); a)
+let Array.append a b =
+  let la = Array.length a and lb = Array.length b in
+  Array.init (la + lb) (fun i -> if i < la then a.(i) else b.(i - la))
+let Array.sub a pos len =
+  if pos < 0 || len < 0 || pos + len > Array.length a then invalid_arg "Array.sub"
+  else Array.init len (fun i -> a.(pos + i))
+let Array.copy a = Array.sub a 0 (Array.length a)
+let Array.fill a pos len x =
+  if pos < 0 || len < 0 || pos + len > Array.length a then invalid_arg "Array.fill"
+  else (for i = pos to pos + len - 1 do a.(i) <- x done)
+let Array.map f a = Array.init (Array.length a) (fun i -> f a.(i))
+let Array.iter f a = for i = 0 to Array.length a - 1 do f a.(i) done
+let Array.fold_left f acc a =
+  let r = ref acc in
+  (for i = 0 to Array.length a - 1 do r := f !r a.(i) done); !r
+let Array.to_list a = List.init (Array.length a) (fun i -> a.(i))
+let Array.of_list l =
+  match l with [] -> [||] | x :: _ -> (let a = Array.make (List.length l) x in (List.iteri (fun i y -> a.(i) <- y) l; a))
+let Bytes.make n c = if n < 0 then invalid_arg "Bytes.make" else __bytes_make n (Char.code c)
+let Bytes.get b i = Char.chr (__bytes_get b i)
+let Bytes.set b i c = __bytes_set b i (Char.code c)
+let Bytes.of_string s =
+  let b = __bytes_make (String.length s) 0 in
+  (for i = 0 to String.length s - 1 do __bytes_set b i (Char.code (String.get s i)) done); b
+let Bytes.to_string b = String.init (Bytes.length b) (fun i -> Char.chr (__bytes_get b i))
+let Bytes.sub b pos len =
+  if pos < 0 || len < 0 || pos + len > Bytes.length b then invalid_arg "Bytes.sub"
+  else (let r = __bytes_make len 0 in
+    (for i = 0 to len - 1 do __bytes_set r i (__bytes_get b (pos + i)) done); r)
+let Bytes.copy b = Bytes.sub b 0 (Bytes.length b)
+let Bytes.fill b pos len c =
+  if pos < 0 || len < 0 || pos + len > Bytes.length b then invalid_arg "Bytes.fill"
+  else (for i = pos to pos + len - 1 do Bytes.set b i c done)
+let List.find_map f l =
+  let rec go l = match l with [] -> None | x :: xs -> (match f x with None -> go xs | Some _ as r -> r) in go l
+let List.rev_map f l =
+  let rec go acc l = match l with [] -> List.rev acc | x :: xs -> go (f x :: acc) xs in go [] l
+let List.mem_assoc k l = List.exists (fun (a, _) -> a = k) l
+let List.remove_assoc k l = List.filter (fun (a, _) -> a <> k) l
+let List.compare_lengths a b =
+  let rec go a b = match a, b with [], [] -> 0 | [], _ -> -1 | _, [] -> 1 | _ :: xs, _ :: ys -> go xs ys in go a b
+type 'a seq_node = SeqNil | SeqCons of 'a * (unit -> 'a seq_node)
+let Seq.empty () = SeqNil
+let Seq.cons x s () = SeqCons (x, s)
+let rec Seq.ints n () = SeqCons (n, Seq.ints (n + 1))
+let Seq.unfold f init () =
+  let rec go s () = match f s with None -> SeqNil | Some (x, s2) -> SeqCons (x, go s2) in go init ()
+let rec Seq.map f s () = match s () with SeqNil -> SeqNil | SeqCons (x, rest) -> SeqCons (f x, Seq.map f rest)
+let rec Seq.filter p s () =
+  match s () with SeqNil -> SeqNil | SeqCons (x, rest) -> if p x then SeqCons (x, Seq.filter p rest) else Seq.filter p rest ()
+let rec Seq.take n s () =
+  if n <= 0 then SeqNil
+  else match s () with SeqNil -> SeqNil | SeqCons (x, rest) -> SeqCons (x, Seq.take (n - 1) rest)
+let rec Seq.drop n s = if n <= 0 then s else match s () with SeqNil -> (fun () -> SeqNil) | SeqCons (_, rest) -> Seq.drop (n - 1) rest
+let rec Seq.fold_left f acc s = match s () with SeqNil -> acc | SeqCons (x, rest) -> Seq.fold_left f (f acc x) rest
+let Seq.iter f s = Seq.fold_left (fun () x -> f x) () s
+let Seq.of_list l () = let rec go l () = match l with [] -> SeqNil | x :: xs -> SeqCons (x, go xs) in go l ()
+let Seq.to_list s = List.rev (Seq.fold_left (fun acc x -> x :: acc) [] s)
+let Seq.find_opt p s = Seq.fold_left (fun acc x -> match acc with Some _ -> acc | None -> if p x then Some x else None) None s
+type ('k, 'v) hashtbl = { buckets : ('k * 'v) list array; count : int ref }
+let Hashtbl.create n =
+  let size = if n <= 0 then 16 else n in
+  { buckets = Array.make size []; count = ref 0 }
+let Hashtbl.index h k = Hashtbl.hash k mod Array.length h.buckets
+let Hashtbl.add h k v =
+  let i = Hashtbl.index h k in
+  (h.buckets.(i) <- (k, v) :: h.buckets.(i)); incr h.count
+let Hashtbl.find_opt h k = List.find_map (fun (a, b) -> if a = k then Some b else None) h.buckets.(Hashtbl.index h k)
+let Hashtbl.mem h k = Hashtbl.find_opt h k <> None
+let Hashtbl.remove h k =
+  let i = Hashtbl.index h k in
+  let before = List.length h.buckets.(i) in
+  (h.buckets.(i) <- List.remove_assoc k h.buckets.(i));
+  h.count := !h.count - (before - List.length h.buckets.(i))
+let Hashtbl.replace h k v = (Hashtbl.remove h k; Hashtbl.add h k v)
+let Hashtbl.length h = !h.count
+let Hashtbl.clear h = (Array.fill h.buckets 0 (Array.length h.buckets) []; h.count := 0)
+let Hashtbl.iter f h = Array.iter (List.iter (fun (k, v) -> f k v)) h.buckets
+let Hashtbl.fold f h acc = Array.fold_left (fun acc l -> List.fold_left (fun acc (k, v) -> f k v acc) acc l) acc h.buckets
 `;
 
 /* ═════════════════════════ 組裝與編譯 ═════════════════════════ */

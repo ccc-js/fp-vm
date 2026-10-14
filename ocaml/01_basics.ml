@@ -1,5 +1,5 @@
 (* 01_basics.ml : 基礎 —— 值、函式、遞迴、浮點、tuple、list、字串、Printf、柯里化
-   執行:  node mlc.js ml/01_basics.ml && node lispvm.js ml/01_basics.lbc
+   執行:  node mlc.js ml/01_basics.ml && node vm.js ml/01_basics.lbc
    查看型別:  node mlc.js ml/01_basics.ml --types *)
 
 let pi = 3.14159

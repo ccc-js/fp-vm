@@ -3,7 +3,7 @@
 /*
  * cljc.js  —  迷你 Clojure  ->  LBC v1 中間碼
  *
- * 用法:  node cljc.js prog.clj [-o prog.lbc]      產生 prog.lbc，用 lispvm.js / vm2wasm.js 執行
+ * 用法:  node cljc.js prog.clj [-o prog.lbc]      產生 prog.lbc，用 vm.js / vm2wasm.js 執行
  *        node cljc.js prog.clj --scheme            只印出中間產物 (Scheme 核心)，方便除錯
  *
  * 編譯流程:  Clojure --(reader)--> 資料 --(desugar)--> Scheme 核心 --(lispc.js)--> LBC
@@ -147,7 +147,11 @@ function anonFn(body) {                                    // #(+ % 1)  ->  (fn 
 const LBC_PRIMS = new Set(['+', '*', '-', '/', 'quotient', 'remainder', 'modulo', '=', '<', '>', '<=', '>=',
   'abs', 'min', 'max', 'zero?', 'even?', 'odd?', 'not', 'eq?', 'eqv?', 'equal?', 'cons', 'car', 'cdr', 'cadr',
   'cddr', 'caddr', 'list', 'length', 'append', 'reverse', 'null?', 'pair?', 'number?', 'string?', 'symbol?',
-  'procedure?', 'string-append', 'string-length', 'number->string', 'display', 'write', 'newline', 'error']);
+  'procedure?', 'string-append', 'string-length', 'number->string', 'display', 'write', 'newline', 'error',
+  'sqrt', 'floor', 'ceil', 'sin', 'cos', 'atan2', 'exp', 'log', 'pow',
+  'bit-and', 'bit-or', 'bit-xor', 'shift-left', 'shift-right', 'shift-right-logical',
+  'compare', 'hash', 'char-code', 'char-chr', 'string-get',
+  'vector', 'make-vector', 'vector-length', 'vector-ref', 'vector-set!', 'set-car!', 'set-cdr!']);
 const SCHEME_KW = ['quote', 'if', 'define', 'set!', 'lambda', 'begin', 'let', 'let*', 'letrec', 'cond', 'and', 'or', 'when', 'unless', 'else'];
 const RESERVED = new Set([...LBC_PRIMS, ...SCHEME_KW]);
 const ALIAS = { mod: 'modulo', rem: 'remainder', quot: 'quotient', 'fn?': 'procedure?', 'identical?': 'eq?' };

@@ -1,5 +1,5 @@
 ;; 01_basics.clj : 基礎語法 —— def / defn / let / if / cond / case / 字串 / 集合字面值
-;; 執行:  node cljc.js clj/01_basics.clj && node lispvm.js clj/01_basics.lbc
+;; 執行:  node cljc.js clj/01_basics.clj && node vm.js clj/01_basics.lbc
 
 (def pi 3.14159)
 (def greeting "Hello, Clojure!")

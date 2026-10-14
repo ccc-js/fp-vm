@@ -1,5 +1,5 @@
 -- 01_basics.lc : 基礎型態與 lambda / 應用 / let / if
--- 執行:  node lambdac.js examples/01_basics.lc && node lispvm.js examples/01_basics.lbc
+-- 執行:  node lambdac.js examples/01_basics.lc && node vm.js examples/01_basics.lbc
 
 -- 基礎型態: 數字、布林、字串、符號、串列、空串列
 display 42;            newline ();

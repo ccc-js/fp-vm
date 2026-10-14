@@ -3,7 +3,7 @@
 /*
  * mlc.js  —  迷你 ML (OCaml 風格)  ->  LBC v1 中間碼
  *
- * 用法:  node mlc.js prog.ml [-o prog.lbc]     產生 prog.lbc，用 lispvm.js / vm2wasm.js 執行
+ * 用法:  node mlc.js prog.ml [-o prog.lbc]     產生 prog.lbc，用 vm.js / vm2wasm.js 執行
  *        node mlc.js prog.ml --types           只做型別檢查，並印出每個頂層定義的型別
  *        node mlc.js prog.ml --scheme          印出中間產物 (Scheme 核心)
  *        node mlc.js prog.ml --no-check        略過型別檢查
@@ -976,7 +976,11 @@ function checkItem(item) {
 class SStr { constructor(v) { this.v = v; } }
 const LBC_PRIMS = ['+', '*', '-', '/', 'quotient', 'remainder', 'modulo', '=', '<', '>', '<=', '>=', 'abs', 'min', 'max', 'zero?', 'even?',
   'odd?', 'not', 'eq?', 'eqv?', 'equal?', 'cons', 'car', 'cdr', 'cadr', 'cddr', 'caddr', 'list', 'length', 'append', 'reverse', 'null?',
-  'pair?', 'number?', 'string?', 'symbol?', 'procedure?', 'string-append', 'string-length', 'number->string', 'display', 'write', 'newline', 'error'];
+  'pair?', 'number?', 'string?', 'symbol?', 'procedure?', 'string-append', 'string-length', 'number->string', 'display', 'write', 'newline', 'error',
+  'sqrt', 'floor', 'ceil', 'sin', 'cos', 'atan2', 'exp', 'log', 'pow',
+  'bit-and', 'bit-or', 'bit-xor', 'shift-left', 'shift-right', 'shift-right-logical',
+  'compare', 'hash', 'char-code', 'char-chr', 'string-get',
+  'vector', 'make-vector', 'vector-length', 'vector-ref', 'vector-set!', 'set-car!', 'set-cdr!'];
 const SCHEME_KW = ['quote', 'if', 'define', 'set!', 'lambda', 'begin', 'let', 'let*', 'letrec', 'cond', 'and', 'or', 'when', 'unless', 'else'];
 const RESERVED = new Set([...LBC_PRIMS, ...SCHEME_KW]);
 const ident = n => { n = n.replace(/'/g, '_q'); return RESERVED.has(n) ? 'u/' + n : n; };

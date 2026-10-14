@@ -5,7 +5,7 @@ pass=0; fail=0
 for f in ml/*.ml; do
   base=${f%.ml}
   node mlc.js "$f" 2>/dev/null || { echo "編譯失敗 $f"; fail=$((fail+1)); continue; }
-  node lispvm.js "$base.lbc" > /tmp/vm.out 2>&1
+  node vm.js "$base.lbc" > /tmp/vm.out 2>&1
   node vm2wasm.js "$base.lbc" -o "$base.wasm" 2>/dev/null && node vm2wasm.js "$base.wasm" > /tmp/wasm.out 2>&1
   if cmp -s /tmp/vm.out /tmp/wasm.out; then echo "OK    $f"; pass=$((pass+1)); else echo "DIFF  $f"; fail=$((fail+1)); fi
 done

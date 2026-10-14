@@ -31,7 +31,7 @@
  *
  * 【環境】 區域環境 = [parent][bindings]，binding = [name_id][value][next]；
  *    env = 0 代表全域環境 (直接用 GLOBALS 表)。變數名稱在編譯期轉為 name_id，
- *    LOAD/DEF/SET 在執行期沿著環境鏈查找，語意與 lispvm.js 完全相同。
+ *    LOAD/DEF/SET 在執行期沿著環境鏈查找，語意與 vm.js 完全相同。
  *
  * 【函式】 每個 .func 編譯成一個 wasm 函式 (env:i32, argc:i32) -> i32，放在 funcref table。
  *    - 堆疊機的運算元堆疊在編譯期靜態對應到 wasm local (s0, s1, ...)；
@@ -46,7 +46,7 @@ const fs = require('fs');
 const { Worker, isMainThread, workerData, parentPort } = require('worker_threads');
 
 /* ───────────── 常數 ───────────── */
-const TAG = { FLOAT: 1, STR: 2, SYM: 3, PAIR: 4, CLOSURE: 5, PRIM: 6, NIL: 7, VOID: 8, TRUE: 9, FALSE: 10 };
+const TAG = { FLOAT: 1, STR: 2, SYM: 3, PAIR: 4, CLOSURE: 5, PRIM: 6, NIL: 7, VOID: 8, TRUE: 9, FALSE: 10, VEC: 11 };
 const NIL = 8, VOID = 16, TRUE = 24, FALSE = 32;
 const ARGBUF = 64, ARGMAX = 256, GBASE = ARGBUF + 4 * ARGMAX;
 const MAX_PAGES = 30000;                       // ~1.9GB，避免位址超過 2^31
@@ -55,7 +55,11 @@ const PRIM_NAMES = ['+', '*', '-', '/', 'quotient', 'remainder', 'modulo', '=', 
   'abs', 'min', 'max', 'zero?', 'even?', 'odd?', 'not', 'eq?', 'eqv?', 'equal?',
   'cons', 'car', 'cdr', 'cadr', 'cddr', 'caddr', 'list', 'length', 'append', 'reverse',
   'null?', 'pair?', 'number?', 'string?', 'symbol?', 'procedure?',
-  'string-append', 'string-length', 'number->string', 'display', 'write', 'newline', 'error'];
+  'string-append', 'string-length', 'number->string', 'display', 'write', 'newline', 'error',
+  'sqrt', 'floor', 'ceil', 'sin', 'cos', 'atan2', 'exp', 'log', 'pow',
+  'bit-and', 'bit-or', 'bit-xor', 'shift-left', 'shift-right', 'shift-right-logical',
+  'compare', 'hash', 'char-code', 'char-chr', 'string-get',
+  'vector', 'make-vector', 'vector-length', 'vector-ref', 'vector-set!', 'set-car!', 'set-cdr!'];
 
 /* ───────────── wasm 二進位組譯小工具 ───────────── */
 const uleb = n => { n = BigInt(n); const o = []; do { let b = Number(n & 0x7fn); n >>= 7n; if (n) b |= 0x80; o.push(b); } while (n); return o; };
@@ -528,6 +532,12 @@ function runBytes(bytes) {
   const mkPair = (a, d) => { const p = ex.alloc(12); wr(p, TAG.PAIR); wr(p + 4, a); wr(p + 8, d); return p; };
   const isPair = v => !(v & 1) && rd(v) === TAG.PAIR;
   const car = v => rd(v + 4), cdr = v => rd(v + 8);
+  const mkVec = a => { const p = ex.alloc(8 + 4 * a.length); wr(p, TAG.VEC); wr(p + 4, a.length); a.forEach((v, i) => wr(p + 8 + 4 * i, v)); return p; };
+  const isVec = v => !(v & 1) && rd(v) === TAG.VEC;
+  const vecLen = v => rd(v + 4);
+  const vecRef = (v, i) => rd(v + 8 + 4 * i);
+  const vecSet = (v, i, x) => wr(v + 8 + 4 * i, x);
+  const vecToArray = v => { const a = []; for (let i = 0; i < vecLen(v); i++) a.push(vecRef(v, i)); return a; };
   const bool = b => b ? TRUE : FALSE;
   const arrOf = l => { const a = []; for (; isPair(l); l = cdr(l)) a.push(car(l)); return a; };
   const listOf = a => { let r = NIL; for (let i = a.length - 1; i >= 0; i--) r = mkPair(a[i], r); return r; };
@@ -549,22 +559,83 @@ function runBytes(bytes) {
         for (; isPair(p); p = cdr(p)) parts.push(toStr(car(p), write));
         return '(' + parts.join(' ') + (p === NIL ? '' : ' . ' + toStr(p, write)) + ')';
       }
+      case TAG.VEC: return '[|' + vecToArray(v).map(x => toStr(x, write)).join('; ') + '|]';
     }
     return '#<unknown>';
   }
+  const cmpVal = (a, b) => {
+    const rank = v => isNumV(v) ? 0 : tagOf(v) === TAG.STR ? 1 : tagOf(v) === TAG.SYM ? 2
+      : v === NIL ? 3 : (v === TRUE || v === FALSE) ? 4 : isPair(v) ? 5 : isVec(v) ? 6 : -1;
+    const ra = rank(a), rb = rank(b);
+    if (ra < 0 || rb < 0) throw new Error('compare: 不支援函式或 void 的比較');
+    if (ra !== rb) return ra < rb ? -1 : 1;
+    switch (ra) {
+      case 0: { const x = numVal(a), y = numVal(b); return x < y ? -1 : x > y ? 1 : 0; }
+      case 1: { const x = strOf(a), y = strOf(b); return x < y ? -1 : x > y ? 1 : 0; }
+      case 2: { const x = strOf(rd(a + 4)), y = strOf(rd(b + 4)); return x < y ? -1 : x > y ? 1 : 0; }
+      case 3: return 0;
+      case 4: return a === b ? 0 : a === FALSE ? -1 : 1;
+      case 5: { const c = cmpVal(car(a), car(b)); return c !== 0 ? c : cmpVal(cdr(a), cdr(b)); }
+      case 6: {
+        if (vecLen(a) !== vecLen(b)) return vecLen(a) < vecLen(b) ? -1 : 1;
+        for (let i = 0; i < vecLen(a); i++) { const c = cmpVal(vecRef(a, i), vecRef(b, i)); if (c !== 0) return c; }
+        return 0;
+      }
+    }
+    return 0;
+  };
+  const hashVal = v => {
+    const mix = h => ((h | 0) * 31 | 0) & 0x3fffffff;
+    const strH = s => { let h = 0; for (let i = 0; i < s.length; i++) h = mix(h + s.charCodeAt(i)); return h; };
+    const go = (v, d) => {
+      if (isNumV(v)) { const x = numVal(v); return mix(x | 0) ^ mix(Math.floor(Math.abs(x % 1) * 1e9)); }
+      const t = tagOf(v);
+      if (t === TAG.STR) return strH('s' + strOf(v));
+      if (t === TAG.SYM) return strH('k' + strOf(rd(v + 4)));
+      if (v === NIL) return 0x1a2b3c;
+      if (v === TRUE) return 0x111; if (v === FALSE) return 0x222;
+      if (d <= 0) return 0x777;
+      if (isPair(v)) return mix(go(car(v), d - 1)) ^ (mix(go(cdr(v), d - 1)) + 0x9e37);
+      if (isVec(v)) { let h = vecLen(v); for (const x of vecToArray(v)) h = mix(h) ^ go(x, d - 1); return h; }
+      throw new Error('hash: 不支援函式或 void 的雜湊');
+    };
+    return go(v, 8);
+  };
   const eqv = (a, b) => {
     if (a === b) return true;
     if (isNumV(a) && isNumV(b)) return numVal(a) === numVal(b);
     return tagOf(a) === TAG.STR && tagOf(b) === TAG.STR && strOf(a) === strOf(b);
   };
-  const equal = (a, b) => isPair(a) && isPair(b) ? equal(car(a), car(b)) && equal(cdr(a), cdr(b)) : eqv(a, b);
+  const equal = (a, b) => {
+    if (isPair(a) && isPair(b)) return equal(car(a), car(b)) && equal(cdr(a), cdr(b));
+    if (isVec(a) && isVec(b)) {
+      if (vecLen(a) !== vecLen(b)) return false;
+      for (let i = 0; i < vecLen(a); i++) if (!equal(vecRef(a, i), vecRef(b, i))) return false;
+      return true;
+    }
+    return eqv(a, b);
+  };
 
   /* 內建函式: 引數在 ARGBUF，A(i) 取第 i 個 */
   const A = i => rd(ARGBUF + 4 * i);
   const num = (v, who) => { if (!isNumV(v)) throw new Error(`${who}: 需要數字，得到 ${toStr(v, true)}`); return numVal(v); };
   const req = (who, n, k) => { if (n < k) throw new Error(`${who}: 參數個數錯誤 (需要 ${k}，得到 ${n})`); };
   const nums = (who, n) => { const r = []; for (let i = 0; i < n; i++) r.push(num(A(i), who)); return r; };
-  const cmp = (who, f) => n => { const a = nums(who, n); for (let i = 0; i < a.length - 1; i++) if (!f(a[i], a[i + 1])) return FALSE; return TRUE; };
+  const cmp = (who, f) => n => {
+    const a = []; for (let i = 0; i < n; i++) a.push(A(i));
+    for (let i = 0; i < a.length - 1; i++) {
+      const x = a[i], y = a[i + 1];
+      let ok = null;
+      if (isNumV(x) && isNumV(y)) ok = f(numVal(x), numVal(y));
+      else if (tagOf(x) === TAG.STR && tagOf(y) === TAG.STR) {
+        const xs = strOf(x), ys = strOf(y);
+        ok = f(xs < ys ? -1 : xs > ys ? 1 : 0, 0);
+      }
+      if (ok === null) throw new Error(`${who}: 需要兩個數字或兩個字串，得到 ${toStr(x, true)} 與 ${toStr(y, true)}`);
+      if (!ok) return FALSE;
+    }
+    return TRUE;
+  };
   const pairOrErr = (who, v) => { if (!isPair(v)) throw new Error(`${who}: 不是 pair: ${toStr(v, true)}`); return v; };
 
   const impl = {
@@ -612,6 +683,61 @@ function runBytes(bytes) {
     'write': n => { req('write', n, 1); out(toStr(A(0), true)); return VOID; },
     'newline': () => { out('\n'); return VOID; },
     'error': n => { const a = []; for (let i = 0; i < n; i++) a.push(toStr(A(i), false)); throw new Error(a.join(' ')); },
+    'sqrt': n => { req('sqrt', n, 1); return mkNum(Math.sqrt(num(A(0), 'sqrt'))); },
+    'floor': n => { req('floor', n, 1); return mkNum(Math.floor(num(A(0), 'floor'))); },
+    'ceil': n => { req('ceil', n, 1); return mkNum(Math.ceil(num(A(0), 'ceil'))); },
+    'sin': n => { req('sin', n, 1); return mkNum(Math.sin(num(A(0), 'sin'))); },
+    'cos': n => { req('cos', n, 1); return mkNum(Math.cos(num(A(0), 'cos'))); },
+    'atan2': n => { req('atan2', n, 2); return mkNum(Math.atan2(num(A(0), 'atan2'), num(A(1), 'atan2'))); },
+    'exp': n => { req('exp', n, 1); return mkNum(Math.exp(num(A(0), 'exp'))); },
+    'log': n => { req('log', n, 1); return mkNum(Math.log(num(A(0), 'log'))); },
+    'pow': n => { req('pow', n, 2); return mkNum(Math.pow(num(A(0), 'pow'), num(A(1), 'pow'))); },
+    'bit-and': n => { req('bit-and', n, 2); return mkNum((num(A(0), 'bit-and') | 0) & (num(A(1), 'bit-and') | 0)); },
+    'bit-or': n => { req('bit-or', n, 2); return mkNum((num(A(0), 'bit-or') | 0) | (num(A(1), 'bit-or') | 0)); },
+    'bit-xor': n => { req('bit-xor', n, 2); return mkNum((num(A(0), 'bit-xor') | 0) ^ (num(A(1), 'bit-xor') | 0)); },
+    'shift-left': n => { req('shift-left', n, 2); return mkNum((num(A(0), 'shift-left') | 0) << ((num(A(1), 'shift-left') | 0) & 31)); },
+    'shift-right': n => { req('shift-right', n, 2); return mkNum((num(A(0), 'shift-right') | 0) >> ((num(A(1), 'shift-right') | 0) & 31)); },
+    'shift-right-logical': n => { req('shift-right-logical', n, 2); return mkNum((num(A(0), 'shift-right-logical') | 0) >>> ((num(A(1), 'shift-right-logical') | 0) & 31)); },
+    'compare': n => { req('compare', n, 2); return mkNum(cmpVal(A(0), A(1))); },
+    'hash': n => { req('hash', n, 1); return mkNum(hashVal(A(0))); },
+    'char-code': n => {
+      req('char-code', n, 1);
+      if (tagOf(A(0)) !== TAG.STR || strOf(A(0)).length !== 1) throw new Error(`char-code: 需要字元，得到 ${toStr(A(0), true)}`);
+      return mkNum(strOf(A(0)).codePointAt(0));
+    },
+    'char-chr': n => {
+      req('char-chr', n, 1); const c = num(A(0), 'char-chr');
+      if (!Number.isInteger(c) || c < 0 || c > 0x10ffff) throw new Error(`char-chr: 字元碼超出範圍 ${c}`);
+      return mkStr(String.fromCodePoint(c));
+    },
+    'string-get': n => {
+      req('string-get', n, 2);
+      if (tagOf(A(0)) !== TAG.STR) throw new Error(`string-get: 需要字串，得到 ${toStr(A(0), true)}`);
+      const s = strOf(A(0)), i = num(A(1), 'string-get');
+      if (!Number.isInteger(i) || i < 0 || i >= s.length) throw new Error(`string-get: 索引超出範圍 ${i} (長度 ${s.length})`);
+      return mkStr(s[i]);
+    },
+    'vector': n => { const a = []; for (let i = 0; i < n; i++) a.push(A(i)); return mkVec(a); },
+    'make-vector': n => {
+      req('make-vector', n, 2); const len = num(A(0), 'make-vector');
+      if (!Number.isInteger(len) || len < 0) throw new Error(`make-vector: 長度錯誤 ${len}`);
+      return mkVec(Array(len).fill(A(1)));
+    },
+    'vector-length': n => { req('vector-length', n, 1); if (!isVec(A(0))) throw new Error(`vector-length: 不是陣列，得到 ${toStr(A(0), true)}`); return mkNum(vecLen(A(0))); },
+    'vector-ref': n => {
+      req('vector-ref', n, 2); const v = A(0), i = num(A(1), 'vector-ref');
+      if (!isVec(v)) throw new Error(`vector-ref: 不是陣列，得到 ${toStr(v, true)}`);
+      if (!Number.isInteger(i) || i < 0 || i >= vecLen(v)) throw new Error(`vector-ref: 索引超出範圍 ${i} (長度 ${vecLen(v)})`);
+      return vecRef(v, i);
+    },
+    'vector-set!': n => {
+      req('vector-set!', n, 3); const v = A(0), i = num(A(1), 'vector-set!');
+      if (!isVec(v)) throw new Error(`vector-set!: 不是陣列，得到 ${toStr(v, true)}`);
+      if (!Number.isInteger(i) || i < 0 || i >= vecLen(v)) throw new Error(`vector-set!: 索引超出範圍 ${i} (長度 ${vecLen(v)})`);
+      vecSet(v, i, A(2)); return VOID;
+    },
+    'set-car!': n => { req('set-car!', n, 2); wr(pairOrErr('set-car!', A(0)) + 4, A(1)); return VOID; },
+    'set-cdr!': n => { req('set-cdr!', n, 2); wr(pairOrErr('set-cdr!', A(0)) + 8, A(1)); return VOID; },
   };
   const prims = PRIM_NAMES.map(pn => impl[pn]);
 

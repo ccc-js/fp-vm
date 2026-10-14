@@ -78,7 +78,7 @@
   LOAD ml/print_endline
   LOAD greeting
   CALL 1
-  DEF %v118
+  DEF %v311
   POP
   CLOSURE square#49
   DEF square
@@ -103,7 +103,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v121
+  DEF %v314
   POP
   CLOSURE fact#53
   DEF fact
@@ -130,7 +130,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v122
+  DEF %v315
   POP
   CLOSURE circle_area#55
   DEF circle_area
@@ -149,7 +149,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v123
+  DEF %v316
   POP
   LOAD ml/print_endline
   LOAD ml/string_of_float
@@ -161,7 +161,7 @@
   CALL 2
   CALL 1
   CALL 1
-  DEF %v124
+  DEF %v317
   POP
   CLOSURE swap#56
   DEF swap
@@ -172,15 +172,15 @@
   CONST "one"
   CALL 2
   CALL 1
-  DEF %v126
+  DEF %v319
   POP
   LOAD car
-  LOAD %v126
+  LOAD %v319
   CALL 1
   DEF x
   POP
   LOAD cadr
-  LOAD %v126
+  LOAD %v319
   CALL 1
   DEF y
   POP
@@ -196,7 +196,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v127
+  DEF %v320
   POP
   LOAD list
   CONST 1
@@ -237,7 +237,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v128
+  DEF %v321
   POP
   LOAD ml/List.map/2
   CLOSURE lambda#62
@@ -277,7 +277,7 @@
   CALL 2
   CALL 2
   CALL 1
-  DEF %v131
+  DEF %v324
   POP
   LOAD ml/print_endline
   LOAD show_list
@@ -298,7 +298,7 @@
   CALL 2
   CALL 1
   CALL 1
-  DEF %v132
+  DEF %v325
   POP
   LOAD ml/print_endline
   LOAD string-append
@@ -309,7 +309,7 @@
   CALL 2
   CALL 2
   CALL 1
-  DEF %v133
+  DEF %v326
   POP
   LOAD display
   LOAD string-append
@@ -325,7 +325,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v134
+  DEF %v327
   POP
   CLOSURE describe#65
   DEF describe
@@ -338,7 +338,7 @@
   CONST 5
   CALL 3
   CALL 2
-  DEF %v135
+  DEF %v328
   POP
   CLOSURE ring_area/2#67
   DEF ring_area/2
@@ -361,7 +361,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v138
+  DEF %v331
   POP
   CLOSURE add/2#72
   DEF add/2
@@ -396,7 +396,7 @@
   CALL 1
   POP
   CONST null
-  DEF %v142
+  DEF %v335
   POP
   CLOSURE id#76
   DEF id
@@ -427,7 +427,7 @@ L33:
   CALL 1
   POP
   CONST null
-  DEF %v143
+  DEF %v336
   POP
   LOAD display
   LOAD string-append
@@ -479,7 +479,7 @@ L33:
   CALL 1
   POP
   CONST null
-  DEF %v144
+  DEF %v337
   POP
   LOAD ml/print_endline
   LOAD string-append
@@ -489,7 +489,7 @@ L33:
   CONST "%"
   CALL 2
   CALL 1
-  DEF %v145
+  DEF %v338
   HALT
 .func ml/id#0 x
   LOAD x
@@ -548,13 +548,13 @@ L1:
   LOAD s
   CALL 2
   TAILCALL 2
-.func ml/__repeat#5 %c19
+.func ml/__repeat#5 %c31
   CLOSURE lambda#6
   RET
-.func lambda#6 %c20
+.func lambda#6 %c32
   LOAD ml/__repeat/2
-  LOAD %c19
-  LOAD %c20
+  LOAD %c31
+  LOAD %c32
   TAILCALL 2
 .func ml/__pad_left/3#7 w c s
   CLOSURE lambda#8
@@ -581,17 +581,17 @@ L1:
 L2:
   LOAD s
   RET
-.func ml/__pad_left#9 %c21
+.func ml/__pad_left#9 %c33
   CLOSURE lambda#10
   RET
-.func lambda#10 %c22
+.func lambda#10 %c34
   CLOSURE lambda#11
   RET
-.func lambda#11 %c23
+.func lambda#11 %c35
   LOAD ml/__pad_left/3
-  LOAD %c21
-  LOAD %c22
-  LOAD %c23
+  LOAD %c33
+  LOAD %c34
+  LOAD %c35
   TAILCALL 3
 .func ml/__pad_right/2#12 w s
   CLOSURE lambda#13
@@ -618,13 +618,13 @@ L2:
 L3:
   LOAD s
   RET
-.func ml/__pad_right#14 %c24
+.func ml/__pad_right#14 %c36
   CLOSURE lambda#15
   RET
-.func lambda#15 %c25
+.func lambda#15 %c37
   LOAD ml/__pad_right/2
-  LOAD %c24
-  LOAD %c25
+  LOAD %c36
+  LOAD %c37
   TAILCALL 2
 .func ml/__pow10#16 n
   LOAD <=
@@ -744,13 +744,13 @@ L7:
 L5:
   LOAD body
   RET
-.func ml/__fmt_float#24 %c26
+.func ml/__fmt_float#24 %c38
   CLOSURE lambda#25
   RET
-.func lambda#25 %c27
+.func lambda#25 %c39
   LOAD ml/__fmt_float/2
-  LOAD %c26
-  LOAD %c27
+  LOAD %c38
+  LOAD %c39
   TAILCALL 2
 .func ml/List.map/2#26 f l
   LOAD null?
@@ -790,13 +790,13 @@ L13:
   LOAD xs
   CALL 2
   TAILCALL 2
-.func ml/List.map#29 %c28
+.func ml/List.map#29 %c42
   CLOSURE lambda#30
   RET
-.func lambda#30 %c29
+.func lambda#30 %c43
   LOAD ml/List.map/2
-  LOAD %c28
-  LOAD %c29
+  LOAD %c42
+  LOAD %c43
   TAILCALL 2
 .func ml/List.iter/2#31 f l
   LOAD null?
@@ -831,13 +831,13 @@ L15:
   LOAD f
   LOAD xs
   TAILCALL 2
-.func ml/List.iter#33 %c34
+.func ml/List.iter#33 %c48
   CLOSURE lambda#34
   RET
-.func lambda#34 %c35
+.func lambda#34 %c49
   LOAD ml/List.iter/2
-  LOAD %c34
-  LOAD %c35
+  LOAD %c48
+  LOAD %c49
   TAILCALL 2
 .func ml/List.fold_left/3#35 f acc l
   LOAD null?
@@ -873,17 +873,17 @@ L17:
   CALL 1
   LOAD xs
   TAILCALL 3
-.func ml/List.fold_left#37 %c40
+.func ml/List.fold_left#37 %c54
   CLOSURE lambda#38
   RET
-.func lambda#38 %c41
+.func lambda#38 %c55
   CLOSURE lambda#39
   RET
-.func lambda#39 %c42
+.func lambda#39 %c56
   LOAD ml/List.fold_left/3
-  LOAD %c40
-  LOAD %c41
-  LOAD %c42
+  LOAD %c54
+  LOAD %c55
+  LOAD %c56
   TAILCALL 3
 .func ml/List.filter/2#40 p l
   LOAD null?
@@ -926,13 +926,13 @@ L20:
   LOAD p
   LOAD xs
   TAILCALL 2
-.func ml/List.filter#42 %c46
+.func ml/List.filter#42 %c60
   CLOSURE lambda#43
   RET
-.func lambda#43 %c47
+.func lambda#43 %c61
   LOAD ml/List.filter/2
-  LOAD %c46
-  LOAD %c47
+  LOAD %c60
+  LOAD %c61
   TAILCALL 2
 .func ml/String.concat/2#44 sep l
   LOAD null?
@@ -992,13 +992,13 @@ L25:
   CALL 2
   CALL 2
   TAILCALL 2
-.func ml/String.concat#47 %c116
+.func ml/String.concat#47 %c135
   CLOSURE lambda#48
   RET
-.func lambda#48 %c117
+.func lambda#48 %c136
   LOAD ml/String.concat/2
-  LOAD %c116
-  LOAD %c117
+  LOAD %c135
+  LOAD %c136
   TAILCALL 2
 .func square#49 x
   LOAD *
@@ -1014,13 +1014,13 @@ L25:
   LOAD b
   CALL 1
   TAILCALL 2
-.func hypot2#51 %c119
+.func hypot2#51 %c312
   CLOSURE lambda#52
   RET
-.func lambda#52 %c120
+.func lambda#52 %c313
   LOAD hypot2/2
-  LOAD %c119
-  LOAD %c120
+  LOAD %c312
+  LOAD %c313
   TAILCALL 2
 .func fact#53 n
   LOAD <=
@@ -1071,13 +1071,13 @@ L27:
   CALL 2
   LOAD r
   TAILCALL 2
-.func swap#56 %a125
+.func swap#56 %a318
   CLOSURE lambda#57
   LOAD car
-  LOAD %a125
+  LOAD %a318
   CALL 1
   LOAD cadr
-  LOAD %a125
+  LOAD %a318
   CALL 1
   TAILCALL 2
 .func lambda#57 a b
@@ -1116,13 +1116,13 @@ L29:
   LOAD rest
   CALL 1
   TAILCALL 2
-.func lambda#60 %x129
+.func lambda#60 %x322
   CLOSURE lambda#61
   RET
-.func lambda#61 %x130
+.func lambda#61 %x323
   LOAD +
-  LOAD %x129
-  LOAD %x130
+  LOAD %x322
+  LOAD %x323
   TAILCALL 2
 .func lambda#62 x
   LOAD *
@@ -1203,31 +1203,31 @@ L31:
   LOAD outer
   LOAD inner
   TAILCALL 2
-.func ring_area#70 %c136
+.func ring_area#70 %c329
   CLOSURE lambda#71
   RET
-.func lambda#71 %c137
+.func lambda#71 %c330
   LOAD ring_area/2
-  LOAD %c136
-  LOAD %c137
+  LOAD %c329
+  LOAD %c330
   TAILCALL 2
 .func add/2#72 a b
   LOAD +
   LOAD a
   LOAD b
   TAILCALL 2
-.func add#73 %c139
+.func add#73 %c332
   CLOSURE lambda#74
   RET
-.func lambda#74 %c140
+.func lambda#74 %c333
   LOAD add/2
-  LOAD %c139
-  LOAD %c140
+  LOAD %c332
+  LOAD %c333
   TAILCALL 2
-.func add10#75 %p141
+.func add10#75 %p334
   LOAD add/2
   CONST 10
-  LOAD %p141
+  LOAD %p334
   TAILCALL 2
 .func id#76 x
   LOAD x
