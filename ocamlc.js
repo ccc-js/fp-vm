@@ -17,6 +17,9 @@
  *  樣式     變數 _ 字面值 tuple [] [a; b] h :: t Constructor (p, q) {x = p} p as x p1 | p2 (p : t)
  *  型別     type 'a t = A | B of 'a * int | …、record、type alias、型別推論 (let 多型 + value restriction)
  *  運算子   + - * / mod、+. -. *. /.、^、@、::、= <> < > <= >= ==、&& ||、:=、!、|>、@@ (可自訂運算子)
+ *  module    module M = struct ... end、巢狀 module、module type S = sig ... end、簽章標註 (M : S)、
+ *            抽象型別 (封裝)、with type 'a t = ...、open / include / let open M in e / M.(e)、
+ *            functor: module F (X : S) = struct ... end、F (A)、F (struct ... end)、F ()、多參數 functor、結果簽章
  *  型別系統 Hindley-Milner 推論 + let 多型 + 放寬版 value restriction (協變位置的型別變數仍可泛化，與 OCaml 相同)
  *  函式庫   List.* Option.* Result.* String.length/concat、print_string/int/float/endline、string_of_*、ref、
  *           Printf.printf / sprintf (%d %s %f %.2f %b %5d %-5s %05d %%)，皆以 ML 寫成 (見 PRELUDE)
@@ -27,7 +30,9 @@
  *  record = 欄位值的 list (依宣告順序)   ref = 以 closure 封裝的可變格
  *
  * ────────────── 與真正 OCaml 的差異 ──────────────
- *  - 沒有 module / functor / open、沒有 exception / try (用 failwith)、沒有 array、沒有 char
+ *  - 沒有 exception / try (用 failwith)、沒有 array、沒有 char
+ *  - module: functor 以「套用時展開」實作 (generative)，functor 本體在套用時才會被型別檢查，且只對引數做簽章符合性檢查
+ *    (本體看得到引數的所有成員)；不支援 let module、module rec、first-class module、functor 型別、module type of
  *  - 沒有 labeled / optional 參數、沒有 GADT / 多型變體 / object、record 欄位不可 mutable (請用 ref)
  *  - 數字是 JS 的 double: int 超過 2^53 會失準；int 與 float 在執行期不分
  *  - < > <= >= 與 compare 只支援數字 (VM 無字串比較)；= 則是完整的結構相等
@@ -39,11 +44,10 @@ class MLError extends Error {}
 const fail = (line, msg) => { throw new MLError(line ? `第 ${line} 行: ${msg}` : msg); };
 
 /* ═════════════════════════ Lexer ═════════════════════════ */
-const MODULES = new Set(['List', 'String', 'Option', 'Result', 'Printf', 'Fun', 'Int', 'Float', 'Bool']);
 const KEYWORDS = new Set(['let', 'rec', 'and', 'in', 'fun', 'function', 'match', 'with', 'if', 'then', 'else', 'type', 'of',
   'begin', 'end', 'true', 'false', 'mod', 'external', 'when', 'as', 'while', 'for', 'do', 'done', 'to', 'downto',
-  'open', 'module', 'try', 'exception', 'mutable', 'lazy', 'class', 'object', 'functor', 'sig', 'struct']);
-const UNSUPPORTED_KW = new Set(['open', 'module', 'try', 'exception', 'mutable', 'lazy', 'class', 'object', 'functor', 'sig', 'struct']);
+  'open', 'module', 'try', 'exception', 'mutable', 'lazy', 'class', 'object', 'functor', 'sig', 'struct', 'val', 'include']);
+const UNSUPPORTED_KW = new Set(['try', 'exception', 'mutable', 'lazy', 'class', 'object']);
 const OPCH = '!$%&*+-./:<=>?@^|~';
 
 function lex(src) {
@@ -96,10 +100,14 @@ function lex(src) {
         push('bindop', w + src.slice(i, j)); i = j; continue;
       }
       if (/[A-Z]/.test(w[0])) {
-        if (MODULES.has(w) && src[i] === '.' && /[a-z_]/.test(src[i + 1] || '')) {
-          const part = /^[a-z_][A-Za-z0-9_']*/.exec(src.slice(i + 1))[0];
-          i += 1 + part.length; push('id', w + '.' + part);
-        } else push('cid', w);
+        let path = w, done = false;                                   // M.N.x (值) / M.N.C (建構子或 module 路徑)
+        while (src[i] === '.' && /[A-Za-z_]/.test(src[i + 1] || '')) {
+          const part = /^[A-Za-z_][A-Za-z0-9_']*/.exec(src.slice(i + 1))[0];
+          if (KEYWORDS.has(part)) break;
+          i += 1 + part.length; path += '.' + part;
+          if (/[a-z_]/.test(part[0])) { push('id', path); done = true; break; }
+        }
+        if (!done) push('cid', path);
       } else if (KEYWORDS.has(w)) push('kw', w);
       else push('id', w);
       continue;
@@ -166,8 +174,12 @@ class Parser {
     if (t.k === 'kw' && UNSUPPORTED_KW.has(t.v)) fail(t.line, `不支援 "${t.v}"`);
     if (this.isKw('type')) return this.parseTypeDecl();
     if (this.isKw('external')) return this.parseExternal();
+    if (this.isKw('module')) return this.parseModuleItem();
+    if (this.isKw('open')) { this.next(); return { t: 'open', path: this.parseModPath(), line: t.line }; }
+    if (this.isKw('include')) { this.next(); return { t: 'include', mexpr: this.parseModExpr(), line: t.line }; }
     if (this.isKw('let')) {
       const save = this.p; this.next();
+      if (this.isKw('open')) { this.p = save; return { t: 'expr', line: t.line, e: this.parseSeq() }; }
       const rec = this.isKw('rec') ? (this.next(), true) : false;
       const binds = this.parseBindings();
       if (this.isKw('in')) { this.p = save; return { t: 'expr', line: t.line, e: this.parseSeq() }; }
@@ -178,8 +190,7 @@ class Parser {
 
   parseExternal() {
     const line = this.next().line;
-    let name;
-    if (this.isOp('(')) { this.next(); name = this.next().v; this.expectOp(')'); } else name = this.expectId();
+    const name = this.parseValName();
     this.expectOp(':');
     const ty = this.parseType();
     this.expectOp('=');
@@ -222,44 +233,153 @@ class Parser {
     this.err('語法錯誤: 需要型別');
   }
 
+  parseTypeParams() {
+    const params = [];
+    if (this.peek().k === 'tyvar') params.push(this.next().v);
+    else if (this.isOp('(') && this.peek(1).k === 'tyvar') {
+      this.next(); params.push(this.next().v);
+      while (this.isOp(',')) { this.next(); params.push(this.next().v); }
+      this.expectOp(')');
+    }
+    return params;
+  }
+  parseTypeDefBody(name, params, line) {                                // "=" 之後的部分: record / variant / alias
+    if (this.isOp('{')) {
+      this.next(); const fields = [];
+      while (!this.isOp('}')) {
+        if (this.isKw('mutable')) fail(this.peek().line, '不支援 mutable 欄位 (請用 ref)');
+        const fname = this.expectId(); this.expectOp(':');
+        fields.push({ name: fname, type: this.parseType() });
+        if (this.isOp(';')) this.next(); else break;
+      }
+      this.expectOp('}');
+      return { name, params, kind: 'record', fields, line };
+    }
+    if (this.isOp('|') || this.peek().k === 'cid') {
+      if (this.isOp('|')) this.next();
+      const ctors = [];
+      for (;;) {
+        const c = this.next();
+        if (c.k !== 'cid') fail(c.line, '需要建構子名稱 (大寫開頭)');
+        const args = [];
+        if (this.isKw('of')) { this.next(); args.push(this.parseAppType()); while (this.isOp('*')) { this.next(); args.push(this.parseAppType()); } }
+        ctors.push({ name: c.v, args });
+        if (this.isOp('|')) this.next(); else break;
+      }
+      return { name, params, kind: 'variant', ctors, line };
+    }
+    return { name, params, kind: 'alias', type: this.parseType(), line };
+  }
   parseTypeDecl() {
     const line = this.next().line, defs = [];
     do {
       if (this.isKw('and')) this.next();
-      const params = [];
-      if (this.peek().k === 'tyvar') params.push(this.next().v);
-      else if (this.isOp('(') && this.peek(1).k === 'tyvar') {
-        this.next(); params.push(this.next().v);
-        while (this.isOp(',')) { this.next(); params.push(this.next().v); }
-        this.expectOp(')');
-      }
-      const name = this.expectId();
+      const params = this.parseTypeParams(), name = this.expectId();
       this.expectOp('=');
-      if (this.isOp('{')) {                                          // record
-        this.next(); const fields = [];
-        while (!this.isOp('}')) {
-          if (this.isKw('mutable')) fail(this.peek().line, '不支援 mutable 欄位 (請用 ref)');
-          const fname = this.expectId(); this.expectOp(':');
-          fields.push({ name: fname, type: this.parseType() });
-          if (this.isOp(';')) this.next(); else break;
-        }
-        this.expectOp('}');
-        defs.push({ name, params, kind: 'record', fields, line });
-      } else if (this.isOp('|') || this.peek().k === 'cid') {        // variant
-        if (this.isOp('|')) this.next();
-        const ctors = [];
-        for (;;) {
-          const c = this.next();
-          if (c.k !== 'cid') fail(c.line, '需要建構子名稱 (大寫開頭)');
-          const args = [];
-          if (this.isKw('of')) { this.next(); args.push(this.parseAppType()); while (this.isOp('*')) { this.next(); args.push(this.parseAppType()); } }
-          ctors.push({ name: c.v, args });
-          if (this.isOp('|')) this.next(); else break;
-        }
-        defs.push({ name, params, kind: 'variant', ctors, line });
-      } else defs.push({ name, params, kind: 'alias', type: this.parseType(), line });
+      defs.push(this.parseTypeDefBody(name, params, line));
     } while (this.isKw('and'));
     return { t: 'type', line, defs };
+  }
+
+  /* ── module / 簽章 / functor ── */
+  expectCid() { const t = this.peek(); if (t.k !== 'cid' || t.v.includes('.')) this.err('語法錯誤: 需要模組名稱 (大寫開頭)'); return this.next().v; }
+  parseModPath() { const t = this.peek(); if (t.k !== 'cid') this.err('語法錯誤: 需要模組路徑'); return this.next().v; }
+  parseValName() {
+    if (this.isOp('(')) { this.next(); const n = this.next().v; this.expectOp(')'); return n; }
+    return this.expectId();
+  }
+  parseItemsUntilEnd() {
+    const items = [];
+    while (!this.isKw('end')) {
+      if (this.peek().k === 'eof') this.err('語法錯誤: 缺少 "end"');
+      if (this.isOp(';;')) { this.next(); continue; }
+      items.push(this.parseItem());
+    }
+    this.next(); return items;
+  }
+  parseModuleItem() {
+    const line = this.next().line;
+    if (this.isKw('type')) {
+      this.next(); const name = this.expectCid(); this.expectOp('=');
+      return { t: 'moduletype', name, sig: this.parseSigExpr(), line };
+    }
+    const name = this.expectCid(), params = [];
+    while (this.isOp('(')) {                                              // module F (X : S) (Y : T) = ...   或  module F () = ...
+      this.next();
+      if (this.isOp(')')) { this.next(); params.push({ name: '_', sig: null }); continue; }
+      const pn = this.expectCid(); this.expectOp(':');
+      const ps = this.parseSigExpr(); this.expectOp(')');
+      params.push({ name: pn, sig: ps });
+    }
+    let sig = null;
+    if (this.isOp(':')) { this.next(); sig = this.parseSigExpr(); }
+    this.expectOp('=');
+    let mexpr = this.parseModExpr();
+    if (params.length) {                                                  // functor X -> functor Y -> (body : 結果簽章)
+      if (sig) mexpr = { t: 'mascribe', m: mexpr, sig, line };
+      for (let i = params.length - 1; i >= 0; i--) mexpr = { t: 'mfunctor', param: params[i].name, sig: params[i].sig, body: mexpr, line };
+      sig = null;
+    }
+    return { t: 'module', name, mexpr, sig, line };
+  }
+  parseModExpr() {
+    const t = this.peek(); let m;
+    if (this.isKw('struct')) { this.next(); m = { t: 'mstruct', items: this.parseItemsUntilEnd(), line: t.line }; }
+    else if (this.isKw('functor')) {
+      this.next(); this.expectOp('('); const pn = this.expectCid(); this.expectOp(':');
+      const ps = this.parseSigExpr(); this.expectOp(')'); this.expectOp('->');
+      return { t: 'mfunctor', param: pn, sig: ps, body: this.parseModExpr(), line: t.line };
+    } else if (this.isOp('(')) {
+      this.next(); m = this.parseModExpr();
+      if (this.isOp(':')) { this.next(); m = { t: 'mascribe', m, sig: this.parseSigExpr(), line: t.line }; }
+      this.expectOp(')');
+    } else if (t.k === 'cid') { this.next(); m = { t: 'mpath', name: t.v, line: t.line }; }
+    else this.err('語法錯誤: 需要 module 運算式 (struct ... end、模組名稱或 functor 套用)');
+    while (this.isOp('(')) {                                              // functor 套用 F (A) (B)
+      const line = this.next().line;
+      const arg = this.isOp(')') ? { t: 'mstruct', items: [], line } : this.parseModExpr();      // F ()
+      this.expectOp(')'); m = { t: 'mapp', f: m, arg, line };
+    }
+    return m;
+  }
+  parseSigExpr() {
+    const t = this.peek(); let sg;
+    if (this.isKw('sig')) { this.next(); sg = { t: 'sig', specs: this.parseSpecs(), line: t.line }; }
+    else if (t.k === 'cid') { this.next(); sg = { t: 'sigpath', name: t.v, line: t.line }; }
+    else this.err('語法錯誤: 需要簽章 (sig ... end 或 module type 名稱)');
+    while (this.isKw('with')) {                                           // S with type 'a t = ... and type u = ...
+      const line = this.next().line, cons = [];
+      do {
+        if (this.isKw('and')) this.next();
+        this.expectKw('type');
+        const params = this.parseTypeParams(), name = this.expectId();
+        this.expectOp('=');
+        cons.push({ params, name, ty: this.parseType() });
+      } while (this.isKw('and'));
+      sg = { t: 'sigwith', base: sg, cons, line };
+    }
+    return sg;
+  }
+  parseSpecs() {
+    const specs = [];
+    while (!this.isKw('end')) {
+      const line = this.peek().line;
+      if (this.isKw('val')) { this.next(); const name = this.parseValName(); this.expectOp(':'); specs.push({ t: 'sval', name, ty: this.parseType(), line }); }
+      else if (this.isKw('type')) {
+        this.next();
+        const params = this.parseTypeParams(), name = this.expectId();
+        let def = null;
+        if (this.isOp('=')) { this.next(); def = this.parseTypeDefBody(name, params, line); }
+        specs.push({ t: 'stype', name, params, def, line });
+      } else if (this.isKw('module')) {
+        this.next();
+        if (this.isKw('type')) fail(line, '簽章中不支援 module type 宣告');
+        const name = this.expectCid(); this.expectOp(':');
+        specs.push({ t: 'smodule', name, sig: this.parseSigExpr(), line });
+      } else if (this.isKw('include')) { this.next(); specs.push({ t: 'sinclude', sig: this.parseSigExpr(), line }); }
+      else this.err('語法錯誤: 簽章中需要 val / type / module / include');
+    }
+    this.next(); return specs;
   }
 
   /* ── let 綁定 ── */
@@ -419,6 +539,8 @@ class Parser {
       switch (t.v) {
         case 'let': {
           this.next();
+          if (this.isKw('open')) { this.next(); const path = this.parseModPath(); this.expectKw('in'); return E('openin', t.line, { path, body: this.parseSeq() }); }
+          if (this.isKw('module')) fail(t.line, '不支援區域 module (let module)，請改在頂層宣告 module');
           const rec = this.isKw('rec') ? (this.next(), true) : false;
           const binds = this.parseBindings();
           this.expectKw('in');
@@ -554,7 +676,12 @@ class Parser {
       case 'float': return lit('float', t.v, line);
       case 'str': return lit('string', t.v, line);
       case 'id': return E('var', line, { name: t.v });
-      case 'cid': return E('con', line, { name: t.v });
+      case 'cid':
+        if (this.isOp('.') && this.isOp('(', 1)) {                            // M.(expr): 局部 open
+          this.next(); this.next(); const body = this.parseSeq(); this.expectOp(')');
+          return E('openin', line, { path: t.v, body });
+        }
+        return E('con', line, { name: t.v });
       case 'bindop': fail(line, `"${t.v}" 只能用在 let* ... and* ... in 結構中 (或寫成 ( ${t.v} ) 來定義它)`);
       case 'kw':
         if (t.v === 'true' || t.v === 'false') return lit('bool', t.v === 'true', line);
@@ -678,14 +805,49 @@ function subst(t, map) {
   return t.args.length ? con(t.con, t.args.map(a => subst(a, map))) : t;
 }
 
+/* ═════════ 命名空間 (module 系統) ═════════
+ * 每個 module 是一個 NS；其中的定義以「限定名稱」(例如 Stack.push) 註冊到全域表 (TYPES / CONS / FIELDS / GT / GC)。
+ * NS 只負責「原始碼中的名稱 -> 限定名稱」的對應 (含 open / include / 簽章造成的可見性)。
+ * 頂層的限定名稱就是原名，所以沒有 module 的程式行為與先前完全相同。 */
+const NS_KINDS = ['vals', 'types', 'cons', 'fields', 'mods', 'mts'];
+class NS {
+  constructor(prefix, parent) {
+    this.prefix = prefix; this.parent = parent;
+    for (const k of NS_KINDS) this[k] = new Map();            // 名稱 -> {v: 限定名稱 (mods: NS/functor, mts: 簽章), exp: 是否對外可見}
+  }
+  qual(n) { return this.prefix ? `${this.prefix}.${n}` : n; }
+}
+let ROOT, CUR;
+const defineName = (kind, name, v, exp = true, ns = CUR) => { ns[kind].set(name, { v, exp }); };
+function lookupEntry(kind, name, ns = CUR) {
+  for (let n = ns; n; n = n.parent) { const e = n[kind].get(name); if (e) return e.v; }
+  return undefined;
+}
+function resolvePath(kind, name, ns = CUR) {                  // 支援 A.B.x 形式的限定名稱
+  if (!name.includes('.')) return lookupEntry(kind, name, ns);
+  const parts = name.split('.'), last = parts.pop();
+  let m = lookupEntry('mods', parts[0], ns);
+  for (let i = 1; i < parts.length && m instanceof NS; i++) { const e = m.mods.get(parts[i]); m = e && e.exp ? e.v : undefined; }
+  if (m instanceof NS) { const e = m[kind].get(last); if (e && e.exp) return e.v; }
+  const r = ROOT[kind].get(name);                             // prelude 的偽 module (List.map 等) 以完整名稱存在於根命名空間
+  return r ? r.v : undefined;
+}
+
 /* 型別環境 */
 let TYPES, CONS, FIELDS, RECS, GT;                            // GT: 全域值 -> {type}
+const lookupCon = name => { const k = resolvePath('cons', name); return k && CONS.get(k); };
+const lookupField = name => { const k = resolvePath('fields', name); return k && FIELDS.get(k); };
+const findCon = (name, line) => { const ci = lookupCon(name); if (!ci) fail(line, `未定義的建構子 "${name}"`); return ci; };
+const findField = (name, line) => { const fi = lookupField(name); if (!fi) fail(line, `未定義的欄位 "${name}"`); return fi; };
+function defineVal(name, info) { const key = CUR.qual(name); GT.set(key, info); defineName('vals', name, key); return key; }
 function resetTypeState() {
+  ROOT = new NS('', null); CUR = ROOT;
+  for (const b of ['int', 'float', 'string', 'bool', 'unit', 'list', 'ref']) defineName('types', b, b, true, ROOT);
   TYPES = new Map([['int', { n: 0 }], ['float', { n: 0 }], ['string', { n: 0 }], ['bool', { n: 0 }], ['unit', { n: 0 }],
     ['list', { n: 1, cov: [true] }], ['ref', { n: 1, cov: [false] }]]);      // cov: 各型別參數是否為協變
   CONS = new Map(); FIELDS = new Map(); RECS = new Map(); GT = new Map();
 }
-const lookupT = (ch, name) => { for (let c = ch; c; c = c.parent) if (c.name === name) return c.info; return GT.get(name); };
+const lookupT = (ch, name) => { for (let c = ch; c; c = c.parent) if (c.name === name) return c.info; return GT.get(resolvePath('vals', name)); };
 const extendT = (ch, map) => { for (const [n, info] of map) ch = { name: n, info, parent: ch }; return ch; };
 
 function convType(te, vars, generic) {
@@ -694,12 +856,12 @@ function convType(te, vars, generic) {
     case 'arrow': return arrow(convType(te.a, vars, generic), convType(te.b, vars, generic));
     case 'tuple': return tupleT(te.items.map(x => convType(x, vars, generic)));
     case 'tname': {
-      const def = TYPES.get(te.name);
+      const key = resolvePath('types', te.name), def = key && TYPES.get(key);
       if (!def) fail(te.line, `未定義的型別 "${te.name}"`);
       if (te.args.length !== def.n) fail(te.line, `型別 ${te.name} 需要 ${def.n} 個型別參數，但給了 ${te.args.length} 個`);
       const args = te.args.map(a => convType(a, vars, generic));
       if (def.alias) return subst(def.alias.type, new Map(def.alias.params.map((p, i) => [p, args[i]])));
-      return con(te.name, args);
+      return con(key, args);
     }
   }
   throw new Error('bad type expr');
@@ -707,31 +869,35 @@ function convType(te, vars, generic) {
 
 function declareTypes(defs) {
   for (const d of defs) {
-    if (TYPES.has(d.name) && ['int', 'float', 'string', 'bool', 'unit', 'list', 'ref'].includes(d.name)) fail(d.line, `不能重新定義內建型別 ${d.name}`);
-    TYPES.set(d.name, { n: d.params.length });
+    const key = CUR.qual(d.name);
+    if (CUR === ROOT && ['int', 'float', 'string', 'bool', 'unit', 'list', 'ref'].includes(d.name)) fail(d.line, `不能重新定義內建型別 ${d.name}`);
+    TYPES.set(key, { n: d.params.length });
+    defineName('types', d.name, key);
   }
   for (const d of defs) {
+    const key = CUR.qual(d.name);
     const vars = new Map(), params = d.params.map(p => { const v = gvar(); vars.set(p, v); return v; });
     if (d.kind === 'variant') {
       d.ctors.forEach(c => {
-        const args = c.args.map(a => convType(a, vars, true));
-        CONS.set(c.name, { name: c.name, tyName: d.name, args, arity: args.length, res: con(d.name, params), siblings: d.ctors.length });
+        const args = c.args.map(a => convType(a, vars, true)), ckey = CUR.qual(c.name);
+        CONS.set(ckey, { name: c.name, tyName: key, args, arity: args.length, res: con(key, params), siblings: d.ctors.length });
+        defineName('cons', c.name, ckey);
       });
     } else if (d.kind === 'record') {
       const fields = d.fields.map(f => ({ name: f.name, type: convType(f.type, vars, true) }));
-      const rec = { name: d.name, params, fields, res: con(d.name, params) };
-      RECS.set(d.name, rec);
-      fields.forEach((f, idx) => FIELDS.set(f.name, { rec, idx, type: f.type }));
-    } else TYPES.get(d.name).alias = { params, type: convType(d.type, vars, true) };
+      const rec = { name: key, params, fields, res: con(key, params) };
+      RECS.set(key, rec);
+      fields.forEach((f, idx) => { const fkey = CUR.qual(f.name); FIELDS.set(fkey, { rec, idx, type: f.type }); defineName('fields', f.name, fkey); });
+    } else TYPES.get(key).alias = { params, type: convType(d.type, vars, true) };
   }
   // 變異性: 先假設所有參數都是協變，再反覆檢查建構子參數 / 欄位型別，把違反者降為不變
   const infos = [];
   for (const d of defs) {
-    const entry = TYPES.get(d.name);
+    const key = CUR.qual(d.name), entry = TYPES.get(key);
     if (entry.alias) continue;
     entry.cov = d.params.map(() => true);
-    const params = d.kind === 'variant' ? CONS.get(d.ctors[0].name).res.args : RECS.get(d.name).params;
-    const types = d.kind === 'variant' ? d.ctors.flatMap(c => CONS.get(c.name).args) : RECS.get(d.name).fields.map(f => f.type);
+    const params = d.kind === 'variant' ? CONS.get(CUR.qual(d.ctors[0].name)).res.args : RECS.get(key).params;
+    const types = d.kind === 'variant' ? d.ctors.flatMap(c => CONS.get(CUR.qual(c.name)).args) : RECS.get(key).fields.map(f => f.type);
     infos.push({ entry, params, types });
   }
   for (let changed = true; changed;) {
@@ -809,8 +975,7 @@ function infer(e, ch) {
       return instantiate(info.type);
     }
     case 'con': {
-      const ci = CONS.get(e.name);
-      if (!ci) fail(e.line, `未定義的建構子 "${e.name}"`);
+      const ci = findCon(e.name, e.line);
       const inst = instCon(ci);
       if (ci.arity === 0) return inst.res;
       if (ci.arity === 1) return arrow(inst.args[0], inst.res);
@@ -818,8 +983,7 @@ function infer(e, ch) {
     }
     case 'app': {
       if (e.f.t === 'con') {
-        const ci = CONS.get(e.f.name);
-        if (!ci) fail(e.line, `未定義的建構子 "${e.f.name}"`);
+        const ci = findCon(e.f.name, e.line);
         if (ci.arity === 0) fail(e.line, `建構子 ${e.f.name} 不接受參數`);
         if (e.args.length !== 1) fail(e.line, `建構子 ${e.f.name} 只能套用一個參數 (多個請用括號 tuple)`);
         const inst = instCon(ci), a = e.args[0];
@@ -880,6 +1044,7 @@ function infer(e, ch) {
       }
       return rt;
     }
+    case 'openin': { const prev = CUR; CUR = openScope(e.path, e.line); try { return infer(e.body, ch); } finally { CUR = prev; } }
     case 'tuple': return tupleT(e.items.map(x => infer(x, ch)));
     case 'list': {
       const et = newVar();
@@ -899,19 +1064,17 @@ function infer(e, ch) {
       infer(e.body, extendT(ch, new Map([[e.v, { type: T.int }]]))); return T.unit;
     }
     case 'field': {
-      const fi = FIELDS.get(e.name);
-      if (!fi) fail(e.line, `未定義的欄位 "${e.name}"`);
+      const fi = findField(e.name, e.line);
       const inst = instRec(fi.rec);
       unifyAt(infer(e.e, ch), inst.res, e.e, `存取欄位 ${e.name}`);
       return inst.fields[fi.idx];
     }
     case 'record': case 'update': {
-      const first = FIELDS.get(e.fields[0].name);
-      if (!first) fail(e.line, `未定義的欄位 "${e.fields[0].name}"`);
+      const first = findField(e.fields[0].name, e.line);
       const rec = first.rec, inst = instRec(rec), seen = new Set();
       if (e.t === 'update') unifyAt(infer(e.base, ch), inst.res, e.base, 'record update 的對象');
       for (const f of e.fields) {
-        const fi = FIELDS.get(f.name);
+        const fi = lookupField(f.name);
         if (!fi || fi.rec !== rec) fail(e.line, `欄位 "${f.name}" 不屬於 record 型別 ${rec.name}`);
         if (seen.has(f.name)) fail(e.line, `欄位 "${f.name}" 重複`);
         seen.add(f.name);
@@ -947,8 +1110,7 @@ function inferPat(p, b) {
       return t;
     }
     case 'pcon': {
-      const ci = CONS.get(p.name);
-      if (!ci) fail(p.line, `未定義的建構子 "${p.name}"`);
+      const ci = findCon(p.name, p.line);
       const inst = instCon(ci);
       if (ci.arity === 0) { if (p.arg) fail(p.line, `建構子 ${p.name} 不接受參數`); return inst.res; }
       if (!p.arg) fail(p.line, `建構子 ${p.name} 需要 ${ci.arity} 個參數`);
@@ -974,11 +1136,10 @@ function inferPat(p, b) {
       return t;
     }
     case 'prec': {
-      const first = FIELDS.get(p.fields[0].name);
-      if (!first) fail(p.line, `未定義的欄位 "${p.fields[0].name}"`);
+      const first = findField(p.fields[0].name, p.line);
       const inst = instRec(first.rec);
       for (const f of p.fields) {
-        const fi = FIELDS.get(f.name);
+        const fi = lookupField(f.name);
         if (!fi || fi.rec !== first.rec) fail(p.line, `欄位 "${f.name}" 不屬於 record 型別 ${first.rec.name}`);
         unifyAt(inferPat(f.p, b), inst.fields[fi.idx], f.p, `欄位 ${f.name} 的樣式`);
       }
@@ -1019,15 +1180,14 @@ const countArrows = ty => { let n = 0; while (ty.t === 'arrow') { n++; ty = ty.b
 
 function checkItem(item) {
   switch (item.t) {
-    case 'type': declareTypes(item.defs); break;
     case 'external': {
-      GT.set(item.name, { type: convType(item.ty, new Map(), true) });
+      defineVal(item.name, { type: convType(item.ty, new Map(), true) });
       break;
     }
     case 'let': {
       const out = inferLet(item.rec, item.binds, null);
-      for (const [n, info] of out) GT.set(n, info);
-      item.types = [...out].map(([n, info]) => [n, info.type]);
+      for (const [n, info] of out) defineVal(n, info);
+      for (const [n, info] of out) TYPE_LINES.push({ key: CUR.qual(n), type: info.type });
       break;
     }
     case 'expr': infer(item.e, null); break;
@@ -1057,7 +1217,7 @@ function show(x) {
 }
 
 let GC, IN_PRELUDE = false, USER_DEFS = new Map();               // GC: 全域值 -> {cname, arity, kind}
-const lookupC = (ch, name) => { for (let c = ch; c; c = c.parent) if (c.name === name) return c.info; return GC.get(name); };
+const lookupC = (ch, name) => { for (let c = ch; c; c = c.parent) if (c.name === name) return c.info; return GC.get(resolvePath('vals', name)); };
 const extendC = (ch, names) => { for (const n of names) ch = { name: n, info: { cname: ident(n), arity: 0, kind: 'val' }, parent: ch }; return ch; };
 const directName = info => info.kind === 'ext' ? info.cname : (info.arity >= 2 ? `${info.cname}/${info.arity}` : info.cname);
 
@@ -1095,8 +1255,8 @@ function patCompile(p, acc) {
       }
       case 'pcons': tests.push(['pair?', acc]); go(p.h, ['car', acc]); go(p.tl, ['cdr', acc]); break;
       case 'pcon': {
-        const ci = CONS.get(p.name);
-        if (ci.siblings > 1) tests.push(['eq?', ['car', acc], ['quote', p.name]]);
+        const ci = findCon(p.name, p.line);
+        if (ci.siblings > 1) tests.push(['eq?', ['car', acc], ['quote', ci.name]]);
         if (p.arg && p.arg.t !== 'pwild') {
           if (ci.arity === 1) go(p.arg, nth(acc, 1)); else p.arg.items.forEach((x, i) => go(x, nth(acc, i + 1)));
         }
@@ -1108,7 +1268,7 @@ function patCompile(p, acc) {
         if (!ts.includes(true)) tests.push(ts.length === 1 ? ts[0] : ['or', ...ts]);
         break;
       }
-      case 'prec': for (const f of p.fields) go(f.p, nth(acc, FIELDS.get(f.name).idx)); break;
+      case 'prec': for (const f of p.fields) go(f.p, nth(acc, findField(f.name, p.line).idx)); break;
       case 'pann': go(p.p, acc); break;
       default: throw new Error('patCompile: ' + p.t);
     }
@@ -1145,28 +1305,31 @@ function genMatch(scrut, arms, ch) {
 
 /* let 綁定 -> Scheme 綁定對。具名函式 (元數 k>=2) 產生兩個名稱:  f/k (多參數，直接呼叫用) 與 f (curried，當值用) */
 function genBindings(binds, rec, ch, globalMode) {
+  const cnameFor = n => {                          // 全域定義的 Scheme 名稱: prelude 加 ml/ 前綴；使用者重複定義同名時加唯一尾碼
+    const key = CUR.qual(n);
+    if (IN_PRELUDE) return 'ml/' + key;
+    const c = USER_DEFS.get(key) || 0; USER_DEFS.set(key, c + 1);
+    return ident(key) + (c ? `~${c}` : '');
+  };
   const infos = binds.map(b => {
     if (b.pat.t !== 'pvar') return null;
     const k = b.expr.t === 'fun' ? b.expr.params.length : 0;
-    let cname;
-    if (globalMode) {
-      const n = b.pat.name;
-      if (IN_PRELUDE) cname = 'ml/' + n;
-      else { const c = USER_DEFS.get(n) || 0; USER_DEFS.set(n, c + 1); cname = ident(n) + (c ? `~${c}` : ''); }
-    } else cname = ident(b.pat.name);
-    return { cname, arity: k, kind: k ? 'fun' : 'val' };
+    return { cname: globalMode ? cnameFor(b.pat.name) : ident(b.pat.name), arity: k, kind: k ? 'fun' : 'val' };
   });
-  const register = (c, i, b) => globalMode ? GC.set(b.pat.name, infos[i]) : { name: b.pat.name, info: infos[i], parent: c };
+  const registerGlobal = (n, info) => { const key = CUR.qual(n); GC.set(key, info); defineName('vals', n, key); };
   let chRec = ch;
-  if (rec) binds.forEach((b, i) => { const r = register(chRec, i, b); if (!globalMode) chRec = r; });
-  const defs = [];
+  if (rec) binds.forEach((b, i) => {
+    if (b.pat.t !== 'pvar') return;
+    if (globalMode) registerGlobal(b.pat.name, infos[i]); else chRec = { name: b.pat.name, info: infos[i], parent: chRec };
+  });
+  const defs = [], patInfos = [];
   binds.forEach((b, i) => {
-    const body = rec ? chRec : ch;
+    const bodyCh = rec ? chRec : ch;
     if (b.pat.t === 'pvar') {
       const info = infos[i];
-      if (info.arity === 0) defs.push([info.cname, gen(b.expr, body)]);
+      if (info.arity === 0) defs.push([info.cname, gen(b.expr, bodyCh)]);
       else {
-        const { names, ch2, wrap } = prepParams(b.expr.params, body);
+        const { names, ch2, wrap } = prepParams(b.expr.params, bodyCh);
         const fbody = wrap(gen(b.expr.body, ch2));
         if (info.arity === 1) defs.push([info.cname, ['lambda', names, fbody]]);
         else {
@@ -1176,21 +1339,23 @@ function genBindings(binds, rec, ch, globalMode) {
       }
     } else {
       const t = tmp('v'), pc = patCompile(b.pat, t);
-      defs.push([t, gen(b.expr, body)]);
+      defs.push([t, gen(b.expr, bodyCh)]);
       if (pc.test !== true) defs.push([tmp('chk'), ['if', pc.test, 0, fail_match()]]);
-      for (const [n, code] of pc.binds) defs.push([n, code]);
-      pc.names.forEach(n => { const info = { cname: ident(n), arity: 0, kind: 'val' }; infos.push(info); if (globalMode) { info.cname = IN_PRELUDE ? 'ml/' + n : ident(n); GC.set(n, info); } });
+      pc.binds.forEach(([n, code], j) => {
+        const nm = pc.names[j];
+        if (globalMode) { const info = { cname: cnameFor(nm), arity: 0, kind: 'val' }; defs.push([info.cname, code]); patInfos.push([nm, info]); }
+        else { defs.push([n, code]); patInfos.push([nm, { cname: ident(nm), arity: 0, kind: 'val' }]); }
+      });
     }
   });
   if (globalMode) {
-    // 全域模式: 把 pattern 綁定的名稱改成全域 cname
-    for (const d of defs) if (typeof d[0] === 'string' && !d[0].startsWith('%')) { /* 已是正確名稱 */ }
-    if (!rec) binds.forEach((b, i) => { if (b.pat.t === 'pvar') GC.set(b.pat.name, infos[i]); });
+    if (!rec) binds.forEach((b, i) => { if (b.pat.t === 'pvar') registerGlobal(b.pat.name, infos[i]); });
+    for (const [nm, info] of patInfos) registerGlobal(nm, info);
     return { defs, ch2: ch };
   }
   let ch2 = ch;
   binds.forEach((b, i) => { if (b.pat.t === 'pvar') ch2 = { name: b.pat.name, info: infos[i], parent: ch2 }; });
-  binds.forEach(b => { if (b.pat.t !== 'pvar') ch2 = extendC(ch2, patCompile(b.pat, '%x').names); });
+  for (const [nm, info] of patInfos) ch2 = { name: nm, info, parent: ch2 };
   return { defs, ch2 };
 }
 
@@ -1228,14 +1393,14 @@ function gen(e, ch) {
       return info.cname;
     }
     case 'con': {
-      const ci = CONS.get(e.name);
-      if (ci.arity === 0) return ['quote', [e.name]];
-      const x = tmp('x'); return ['lambda', [x], ['list', ['quote', e.name], x]];
+      const ci = findCon(e.name, e.line);
+      if (ci.arity === 0) return ['quote', [ci.name]];
+      const x = tmp('x'); return ['lambda', [x], ['list', ['quote', ci.name], x]];
     }
     case 'app': {
       if (e.f.t === 'con') {
-        const ci = CONS.get(e.f.name), a = e.args[0];
-        return ['list', ['quote', e.f.name], ...(ci.arity === 1 ? [gen(a, ch)] : a.items.map(x => gen(x, ch)))];
+        const ci = findCon(e.f.name, e.line), a = e.args[0];
+        return ['list', ['quote', ci.name], ...(ci.arity === 1 ? [gen(a, ch)] : a.items.map(x => gen(x, ch)))];
       }
       if (e.f.t === 'var') {
         const info = lookupC(ch, e.f.name);
@@ -1271,6 +1436,7 @@ function gen(e, ch) {
     }
     case 'if': return ['if', gen(e.c, ch), gen(e.a, ch), e.b ? gen(e.b, ch) : NIL_Q];
     case 'match': return genMatch(e.scrut, e.arms, ch);
+    case 'openin': { const prev = CUR; CUR = openScope(e.path, e.line); try { return gen(e.body, ch); } finally { CUR = prev; } }
     case 'tuple': return ['list', ...e.items.map(x => gen(x, ch))];
     case 'list': return e.items.length ? ['list', ...e.items.map(x => gen(x, ch))] : NIL_Q;
     case 'seq': return ['begin', gen(e.a, ch), gen(e.b, ch)];
@@ -1283,9 +1449,9 @@ function gen(e, ch) {
       return ['let', [[hi, gen(e.hi, ch)]], ['letrec', [[lp, ['lambda', [v],
         ['if', [e.down ? '>=' : '<=', v, hi], ['begin', gen(e.body, ch2), [lp, [e.down ? '-' : '+', v, 1]]], NIL_Q]]]], [lp, gen(e.lo, ch)]]];
     }
-    case 'field': return nth(gen(e.e, ch), FIELDS.get(e.name).idx);
+    case 'field': return nth(gen(e.e, ch), findField(e.name, e.line).idx);
     case 'record': case 'update': {
-      const rec = FIELDS.get(e.fields[0].name).rec, given = new Map(e.fields.map(f => [f.name, f.e]));
+      const rec = findField(e.fields[0].name, e.line).rec, given = new Map(e.fields.map(f => [f.name, f.e]));
       if (e.t === 'record') return ['list', ...rec.fields.map(f => gen(given.get(f.name), ch))];
       const t = tmp('r');
       return ['let', [[t, gen(e.base, ch)]], ['list', ...rec.fields.map((f, i) => given.has(f.name) ? gen(given.get(f.name), ch) : nth(t, i))]];
@@ -1298,12 +1464,229 @@ function gen(e, ch) {
 function genItem(item) {
   switch (item.t) {
     case 'type': return [];
-    case 'external': GC.set(item.name, { cname: item.cname, arity: countArrows(item.ty), kind: 'ext' }); return [];
+    case 'external': { const key = CUR.qual(item.name); GC.set(key, { cname: item.cname, arity: countArrows(item.ty), kind: 'ext' }); defineName('vals', item.name, key); return []; }
     case 'expr': return [gen(item.e, null)];
     case 'let': {
       const { defs } = genBindings(item.binds, item.rec, null, true);
       return defs.map(([n, c]) => ['define', n, c]);
     }
+  }
+}
+
+
+/* ═════════════════════════ Module 系統: 簽章、封裝、functor ═════════════════════════
+ * 做法 (defunctorization): module 是命名空間；functor 是「模板」——每次套用時，在一個把參數名稱綁定到實際引數的
+ * 環境中，把 functor 本體重新型別檢查並重新產生程式碼，產生獨立的限定名稱 (generative)。
+ * 簽章 (sig ... end) 用來:  1. 檢查 module 是否符合 (val 的型別必須至少一樣一般)  2. 封裝: 抽象型別對外變成 opaque、
+ * 沒列在簽章中的項目被隱藏。functor 的參數只做符合性檢查 (本體可看到引數的所有成員)。 */
+let NO_CHECK = false, TYPE_LINES = [], anonN = 0;
+const isFunctor = m => !!m && m.functor === true;
+
+function synthModule(name) {                          // prelude 的偽 module (List / String / Option ...) 轉成真正的 NS
+  const ns = new NS(name, null); let any = false;
+  for (const kind of ['vals', 'types', 'cons', 'fields'])
+    for (const [k, e] of ROOT[kind])
+      if (k.startsWith(name + '.') && !k.slice(name.length + 1).includes('.')) { ns[kind].set(k.slice(name.length + 1), { v: e.v, exp: true }); any = true; }
+  return any ? ns : undefined;
+}
+function resolveMod(path, line, ns = CUR) {
+  const parts = path.split('.');
+  let m = lookupEntry('mods', parts[0], ns);
+  if (!m && parts.length === 1) m = synthModule(parts[0]);
+  for (let i = 1; i < parts.length && m instanceof NS; i++) { const e = m.mods.get(parts[i]); m = e && e.exp ? e.v : undefined; }
+  if (!m) fail(line, `未定義的模組 "${path}"`);
+  return m;
+}
+function copyExports(from, to, exp) {
+  for (const kind of NS_KINDS) for (const [k, e] of from[kind]) if (e.exp) to[kind].set(k, { v: e.v, exp });
+}
+function openScope(path, line) {
+  const m = resolveMod(path, line);
+  if (!(m instanceof NS)) fail(line, `"${path}" 是 functor，不能 open`);
+  const ns = new NS('', CUR); copyExports(m, ns, false); return ns;
+}
+
+function evalSig(se, ns = CUR) {                      // 簽章運算式 -> {specs, declNS}
+  const prev = CUR; CUR = ns;
+  try {
+    switch (se.t) {
+      case 'sig': {
+        const specs = [];
+        for (const sp of se.specs) { if (sp.t === 'sinclude') specs.push(...evalSig(sp.sig, ns).specs); else specs.push(sp); }
+        return { specs, declNS: ns };
+      }
+      case 'sigpath': {
+        const sv = resolvePath('mts', se.name, ns);
+        if (!sv) fail(se.line, `未定義的 module type "${se.name}"`);
+        return sv;
+      }
+      case 'sigwith': {
+        const base = evalSig(se.base, ns), specs = [...base.specs];
+        for (const c of se.cons) {
+          const i = specs.findIndex(sp => sp.t === 'stype' && sp.name === c.name);
+          if (i < 0) fail(se.line, `簽章中沒有型別 ${c.name}，無法使用 with type`);
+          if (specs[i].params.length !== c.params.length) fail(se.line, `with type ${c.name}: 型別參數個數與簽章不符`);
+          const vars = new Map(), params = c.params.map(p => { const v = gvar(); vars.set(p, v); return v; });
+          specs[i] = { ...specs[i], def: null, manifest: { params, type: convType(c.ty, vars, true) } };
+        }
+        return { specs, declNS: base.declNS };
+      }
+    }
+  } finally { CUR = prev; }
+  throw new Error('evalSig: ' + se.t);
+}
+
+const typeOfKey = (key, args) => {
+  const def = TYPES.get(key);
+  return def.alias ? subst(def.alias.type, new Map(def.alias.params.map((p, i) => [p, args[i]]))) : con(key, args);
+};
+function skolemize(t, memo = new Map()) {             // 把一般化變數換成「剛性」常數: 檢查 module 的型別是否「至少一樣一般」
+  t = prune(t);
+  if (t.tv) { if (t.level !== GENERIC) return t; let k = memo.get(t); if (!k) memo.set(t, k = con('$sk' + tvId++)); return k; }
+  return t.args.length ? con(t.con, t.args.map(a => skolemize(a, memo))) : t;
+}
+
+/* 檢查 module 是否符合簽章；seal=true 時並套用封裝 (抽象型別變 opaque、val 取簽章中的型別、隱藏未列出的項目) */
+function applySignature(ns, sv, line, what, seal) {
+  const tmp = new NS('', sv.declNS), out = new NS(ns.prefix, ns.parent);
+  const prev = CUR, abstract = [], sealedVals = [];
+  const conv = (ty, vars = new Map()) => { CUR = tmp; try { return convType(ty, vars, true); } finally { CUR = prev; } };
+  try {
+    for (const sp of sv.specs) {
+      if (sp.t === 'stype') {
+        const have = ns.types.get(sp.name);
+        if (!have) fail(line, `${what}: 模組缺少型別 ${sp.name}`);
+        const key = have.v, def = TYPES.get(key);
+        if (def.n !== sp.params.length) fail(line, `${what}: 型別 ${sp.name} 的參數個數不符 (簽章要求 ${sp.params.length} 個，模組定義 ${def.n} 個)`);
+        defineName('types', sp.name, key, true, tmp); defineName('types', sp.name, key, true, out);
+        let man = sp.manifest;
+        if (!man && sp.def && sp.def.kind === 'alias') {
+          const vars = new Map(), params = sp.params.map(p => { const v = gvar(); vars.set(p, v); return v; });
+          man = { params, type: conv(sp.def.type, vars) };
+        }
+        if (man) {                                                       // 簽章指定了型別的定義 (透明)
+          const fresh = man.params.map(() => newVar());
+          try { unify(typeOfKey(key, fresh), subst(man.type, new Map(man.params.map((p, i) => [p, fresh[i]])))); }
+          catch (e) { if (!(e instanceof TypeMismatch)) throw e; fail(line, `${what}: 型別 ${sp.name} 與簽章指定的定義不符`); }
+        } else if (sp.def) {                                             // variant / record 規格: 匯出模組自己的建構子與欄位
+          for (const [n, e] of ns.cons) if (CONS.get(e.v) && CONS.get(e.v).tyName === key) defineName('cons', n, e.v, true, out);
+          for (const [n, e] of ns.fields) if (FIELDS.get(e.v) && FIELDS.get(e.v).rec.name === key) defineName('fields', n, e.v, true, out);
+        } else abstract.push({ key, n: def.n });                         // 抽象型別
+      } else if (sp.t === 'sval') {
+        const have = ns.vals.get(sp.name);
+        if (!have) fail(line, `${what}: 模組缺少 val ${sp.name}`);
+        const info = GT.get(have.v), specT = conv(sp.ty);
+        if (info && info.type) {
+          try { unify(instantiate(info.type), skolemize(specT)); }
+          catch (e) {
+            if (!(e instanceof TypeMismatch)) throw e;
+            const names = new Map();
+            fail(line, `${what}: val ${sp.name} 的型別與簽章不符\n    模組中的型別: ${showType(instantiate(info.type), names)}\n    簽章要求:     ${showType(specT, names)}`);
+          }
+        }
+        defineName('vals', sp.name, have.v, true, out);
+        sealedVals.push({ key: have.v, sp });
+      } else if (sp.t === 'smodule') {
+        const have = ns.mods.get(sp.name);
+        if (!have) fail(line, `${what}: 模組缺少子模組 ${sp.name}`);
+        const sub = have.v instanceof NS ? applySignature(have.v, evalSig(sp.sig, tmp), line, `${what}.${sp.name}`, seal) : have.v;
+        defineName('mods', sp.name, sub, true, out);
+      }
+    }
+    if (seal) {
+      for (const a of abstract) TYPES.set(a.key, { n: a.n, cov: Array(a.n).fill(false) });      // 抽象型別: 對外是 opaque
+      const exported = new Set(sealedVals.map(v => v.key)), pre = ns.prefix + '.';
+      for (const { key, sp } of sealedVals) {
+        const info = GT.get(key);
+        if (info) { const t = conv(sp.ty); GT.set(key, { type: t }); for (const e of TYPE_LINES) if (e.key === key) e.type = t; }   // --types 顯示封裝後的型別
+      }
+      for (const e of TYPE_LINES)                                                // 簽章沒列出的成員: 不顯示
+        if (ns.prefix && e.key.startsWith(pre) && !e.key.slice(pre.length).includes('.') && !exported.has(e.key)) e.hidden = true;
+    }
+  } finally { CUR = prev; }
+  return out;
+}
+
+/* module 運算式 -> {mod: NS 或 functor, forms: 產生的 Scheme 形式} */
+function elabModExpr(me, prefix) {
+  switch (me.t) {
+    case 'mstruct': {
+      const ns = new NS(prefix, CUR), prev = CUR, forms = [];
+      CUR = ns;
+      try { for (const it of me.items) forms.push(...processItem(it)); } finally { CUR = prev; }
+      return { mod: ns, forms };
+    }
+    case 'mpath': return { mod: resolveMod(me.name, me.line), forms: [] };
+    case 'mfunctor': return { mod: { functor: true, param: me.param, sig: me.sig, body: me.body, defNS: CUR }, forms: [] };
+    case 'mascribe': {
+      const r = elabModExpr(me.m, prefix);
+      if (!(r.mod instanceof NS)) fail(me.line, 'functor 本身不能加簽章標註');
+      return { mod: applySignature(r.mod, evalSig(me.sig, CUR), me.line, '簽章標註', true), forms: r.forms };
+    }
+    case 'mapp': {
+      const f = elabModExpr(me.f, `${prefix}$f${anonN++}`), a = elabModExpr(me.arg, `${prefix}$a${anonN++}`), fv = f.mod;
+      if (!isFunctor(fv)) fail(me.line, '這不是 functor，無法套用參數');
+      if (!(a.mod instanceof NS)) fail(me.line, 'functor 的參數必須是 module');
+      if (fv.sig) applySignature(a.mod, evalSig(fv.sig, fv.defNS), me.line, `functor 的參數 ${fv.param}`, false);
+      const scope = new NS('', fv.defNS);                              // functor 定義處的環境 + 參數名稱 -> 實際引數
+      defineName('mods', fv.param, a.mod, true, scope);
+      const prev = CUR; CUR = scope;
+      let r; try { r = elabModExpr(fv.body, prefix); } finally { CUR = prev; }
+      return { mod: r.mod, forms: [...f.forms, ...a.forms, ...r.forms] };
+    }
+  }
+  throw new Error('elabModExpr: ' + me.t);
+}
+
+/* 處理一個項目 (型別檢查 + 產生程式碼)；module 項目會遞迴處理其內部項目 */
+function processItem(item) {
+  switch (item.t) {
+    case 'type': declareTypes(item.defs); return [];
+    case 'module': {
+      const r = elabModExpr(item.mexpr, CUR.qual(item.name));
+      let m = r.mod;
+      if (item.sig) {
+        if (!(m instanceof NS)) fail(item.line, 'functor 不能直接加簽章；請把結果簽章寫在參數之後: module F (X : S) : T = ...');
+        m = applySignature(m, evalSig(item.sig, CUR), item.line, `module ${item.name}`, true);
+      }
+      defineName('mods', item.name, m);
+      return r.forms;
+    }
+    case 'moduletype': defineName('mts', item.name, evalSig(item.sig, CUR)); return [];
+    case 'open': {
+      const m = resolveMod(item.path, item.line);
+      if (!(m instanceof NS)) fail(item.line, `"${item.path}" 是 functor，不能 open`);
+      copyExports(m, CUR, false); return [];
+    }
+    case 'include': {
+      const r = elabModExpr(item.mexpr, CUR.prefix);
+      if (!(r.mod instanceof NS)) fail(item.line, 'include 需要 module，不能是 functor');
+      copyExports(r.mod, CUR, true); return r.forms;
+    }
+    default: {
+      let before = [];
+      if (!NO_CHECK) {
+        // 非遞迴的 let 右邊看到的是「舊的」名稱。型別檢查結束時已登錄新名稱，所以在產生程式碼前先還原，
+        // (產生程式碼時會在本體之後重新登錄)，否則 let compare = compare 這類遮蔽會解析到尚未註冊的新名稱
+        const names = item.t === 'let' && !item.rec ? item.binds.flatMap(b => patNames(b.pat)) : [];
+        before = names.map(n => [n, CUR.vals.get(n)]);
+        checkItem(item);
+      }
+      for (const [n, e] of before) { if (e) CUR.vals.set(n, e); else CUR.vals.delete(n); }
+      return genItem(item);
+    }
+  }
+}
+function patNames(p) {
+  switch (p.t) {
+    case 'pvar': return [p.name];
+    case 'pas': return [p.name, ...patNames(p.p)];
+    case 'ptuple': case 'plist': return p.items.flatMap(patNames);
+    case 'pcons': return [...patNames(p.h), ...patNames(p.tl)];
+    case 'pcon': return p.arg ? patNames(p.arg) : [];
+    case 'prec': return p.fields.flatMap(f => patNames(f.p));
+    case 'pann': return patNames(p.p);
+    default: return [];
   }
 }
 
@@ -1500,13 +1883,14 @@ function scanStrings(x, cb) {
 
 function setup() {
   resetTypeState(); GC = new Map(); USER_DEFS = new Map(); PRELUDE_ITEMS = []; tmpN = 0;
-  GT.set('Printf.printf', { special: 'printf' }); GT.set('Printf.sprintf', { special: 'sprintf' });
-  GC.set('Printf.printf', { special: 'printf' }); GC.set('Printf.sprintf', { special: 'sprintf' });
+  for (const [n, k] of [['Printf.printf', 'printf'], ['Printf.sprintf', 'sprintf']]) {
+    GT.set(n, { special: k }); GC.set(n, { special: k }); defineName('vals', n, n, true, ROOT);
+  }
   for (const [n, f] of RUNTIME_HELPERS) PRELUDE_ITEMS.push({ defines: [n], forms: [f] });
-  IN_PRELUDE = true;
+  IN_PRELUDE = true; NO_CHECK = false; TYPE_LINES = [];
   for (const item of new Parser(lex(PRELUDE)).parseProgram()) {
-    try { checkItem(item); } catch (e) { if (e instanceof MLError) throw new Error('[prelude] ' + e.message); throw e; }
-    const forms = genItem(item);
+    let forms;
+    try { forms = processItem(item); } catch (e) { if (e instanceof MLError) throw new Error('[prelude] ' + e.message); throw e; }
     if (forms.length) PRELUDE_ITEMS.push({ defines: forms.map(f => f[1]), forms });
   }
   IN_PRELUDE = false;
@@ -1514,13 +1898,11 @@ function setup() {
 
 function translate(src, opts = {}) {
   setup();
+  NO_CHECK = !!opts.noCheck; TYPE_LINES = [];
   const items = new Parser(lex(src)).parseProgram();
-  const forms = [], types = [];
-  for (const item of items) {
-    if (!opts.noCheck) checkItem(item);
-    forms.push(...genItem(item));
-    if (item.t === 'let' && item.types) for (const [n, t] of item.types) types.push(`val ${n} : ${showType(t)}`);
-  }
+  const forms = [];
+  for (const item of items) forms.push(...processItem(item));
+  const types = TYPE_LINES.filter(e => !e.hidden).map(e => `val ${e.key} : ${showType(e.type)}`);
   // 依賴分析: 只輸出用到的 prelude 項目
   const defOf = new Map();
   PRELUDE_ITEMS.forEach((it, i) => it.defines.forEach(n => defOf.set(n, i)));
