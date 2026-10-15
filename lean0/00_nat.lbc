@@ -263,7 +263,7 @@ L0:
   CALL 2
   CALL 1
   TAILCALL 2
-.func lambda#51 x_q37
+.func lambda#51 x_q38
   CLOSURE lambda#52
   RET
 .func lambda#52 r
@@ -312,7 +312,7 @@ L1:
   CALL 2
   CALL 1
   TAILCALL 2
-.func lambda#59 x_q42
+.func lambda#59 x_q46
   CLOSURE lambda#60
   RET
 .func lambda#60 r

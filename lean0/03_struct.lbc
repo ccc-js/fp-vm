@@ -74,7 +74,7 @@
   DEF origin
   POP
   CONST 0
-  DEF example55
+  DEF example_q68
   HALT
 .func True/intro#0 C
   CLOSURE lambda#1
@@ -267,7 +267,7 @@ L0:
   CALL 2
   CALL 1
   TAILCALL 2
-.func lambda#51 x_q37
+.func lambda#51 x_q38
   CLOSURE lambda#52
   RET
 .func lambda#52 r
@@ -316,7 +316,7 @@ L1:
   CALL 2
   CALL 1
   TAILCALL 2
-.func lambda#59 x_q42
+.func lambda#59 x_q46
   CLOSURE lambda#60
   RET
 .func lambda#60 r
@@ -408,11 +408,11 @@ L2:
   LOAD x
   LOAD y
   TAILCALL 2
-.func Point/x#82 s_q48
+.func Point/x#82 s_q59
   LOAD car
-  LOAD s_q48
+  LOAD s_q59
   TAILCALL 1
-.func Point/y#83 s_q48
+.func Point/y#83 s_q59
   LOAD cdr
-  LOAD s_q48
+  LOAD s_q59
   TAILCALL 1

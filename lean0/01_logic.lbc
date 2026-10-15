@@ -78,13 +78,13 @@
   DEF ex_intro
   POP
   CONST 0
-  DEF example73
+  DEF example_q95
   POP
   CONST 0
-  DEF example75
+  DEF example_q98
   POP
-  CLOSURE example75#93
-  DEF example75
+  CLOSURE example_q99#93
+  DEF example_q99
   HALT
 .func True/intro#0 C
   CLOSURE lambda#1
@@ -277,7 +277,7 @@ L0:
   CALL 2
   CALL 1
   TAILCALL 2
-.func lambda#51 x_q37
+.func lambda#51 x_q38
   CLOSURE lambda#52
   RET
 .func lambda#52 r
@@ -326,7 +326,7 @@ L1:
   CALL 2
   CALL 1
   TAILCALL 2
-.func lambda#59 x_q42
+.func lambda#59 x_q46
   CLOSURE lambda#60
   RET
 .func lambda#60 r
@@ -488,7 +488,7 @@ L2:
 .func lambda#92 n
   CONST 0
   RET
-.func example75#93 A
+.func example_q99#93 A
   CLOSURE lambda#94
   RET
 .func lambda#94 h

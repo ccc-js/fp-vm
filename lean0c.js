@@ -13,8 +13,14 @@
  *  沒有 general inductive、沒有 universe 多型；And/Or/Exists/Not/False 皆以 surface def
  *  (impredicative 編碼) 提供；structure 展開為巢狀 Sigma。
  *  tactic: rfl exact apply intro rw simp induction assumption swap。
- *  證明項編譯: Nat.rec -> letrec、NatLit -> 數字、Eq.subst -> 取第 3 參數、rfl/證明 -> 0。
+ *  證明項編譯: Nat.rec -> letrec、NatLit -> 數字、Eq.subst -> 取被代入值、rfl/證明 -> 0。
  *  VM (vm.js / vm2wasm.js) 完全不需修改。
+ *
+ *  架構 (LCF 式小核心拆分)：可信任的檢查只在 lean0kernel.js
+ *  (subst/whnf/defeq/inferK/checkK/checkDef，無 meta、無 I/O)；
+ *  本檔是 elaborator (parser、隱式參數/meta 合一、tactic、codegen、命令)，
+ *  每存一個定義前以 kernel.checkDef 重查 (不合即內部錯誤)，tactic 證明則存
+ *  型別 + 公理依賴。詳見 lean0kernel.js.md。
  *
  * ───────────────────────────── 語法 ─────────────────────────────
  *  版面規則: 頂層命令必須從 col 0 開始；接續行與 tactic 行須縮排。
@@ -42,9 +48,28 @@
 const fs = require('fs');
 const lispc = require('./lispc.js');
 const vm = require('./vm.js');
+const kernel = require('./lean0kernel.js');
 
 class L0Error extends Error {}
 const fail = (msg) => { throw new L0Error(msg); };
+
+/* kernel 轉接：項構造子直接共用；whnf/defeq/inferK/sortOfK 經 wrapper 注入 consts 與 flex */
+const { K, SORT, fresh, freeVars, subst, piSort } = kernel;
+const flex = {
+  get: (id) => {
+    const v = G.metas.get(id);
+    return v === undefined || v === null ? undefined : v;
+  },
+  set: (id, t) => { G.metas.set(id, t); },
+};
+const W = (e, full) => kernel.whnf(e, G.consts, !!full, flex);
+const D = (a, b, fuel) => kernel.defeq(a, b, G.consts, fuel || 200, flex);
+const IK = (e) => kernel.inferK(e, localCtx, G.consts, flex);
+const SK = (ty) => kernel.sortOfK(ty, localCtx, G.consts, flex);
+const mset = (id, t) => D(K('meta', { id }), t);
+function unify(a, b) {
+  try { D(a, b); } catch (e) { fail('unify 失敗'); }
+}
 
 /* ═════════════════════════ Lexer (含行列) ═════════════════════════ */
 function lex(src) {
@@ -319,66 +344,9 @@ function parseCommand(chunk) {
 }
 
 /* ═════════════════════════ Kernel ═════════════════════════ */
-let freshN = 0;
-const fresh = (b) => `${b}'${freshN++}`;
-const K = (t, o) => Object.assign({ t }, o);
 
-const freeVars = (e, bound = new Set()) => {
-  const out = new Set();
-  const go = (x, bd) => {
-    if (!x) return;
-    switch (x.t) {
-      case 'var': if (!bd.has(x.name)) out.add(x.name); break;
-      case 'lam': case 'pi': go(x.dom, bd); go(x.body, new Set([...bd, x.name])); break;
-      case 'app': go(x.f, bd); go(x.a, bd); break;
-      case 'let': go(x.ty, bd); go(x.val, bd); go(x.body, new Set([...bd, x.name])); break;
-      case 'sigma': go(x.fst, bd); go(x.snd, new Set([...bd, x.name])); break;
-      case 'pair': go(x.a, bd); go(x.b, bd); break;
-      case 'fst': case 'snd': go(x.p, bd); break;
-      case 'succ': go(x.p, bd); break;
-      case 'eq': go(x.ty, bd); go(x.lhs, bd); go(x.rhs, bd); break;
-      case 'natrec': go(x.motive, bd); go(x.zero, bd); go(x.succ, bd); go(x.target, bd); break;
-      case 'boolrec': go(x.motive, bd); go(x.tt, bd); go(x.ff, bd); go(x.target, bd); break;
-      case 'eqrec': go(x.motive, bd); go(x.h, bd); go(x.target, bd); break;
-    }
-  };
-  go(e, bound);
-  return out;
-};
+;
 
-function subst(e, name, v) {
-  const go = (x) => {
-    if (!x) return x;
-    switch (x.t) {
-      case 'var': return x.name === name ? v : x;
-      case 'lam': case 'pi':
-        if (x.name === name) return x.t === 'lam' ? K('lam', { name: x.name, dom: x.dom && go(x.dom), body: x.body }) : K('pi', { name: x.name, info: x.info, dom: go(x.dom), body: x.body });
-        if (freeVars(v).has(x.name)) {
-          const n2 = fresh(x.name);
-          const renamed = subst(x.body, x.name, K('var', { name: n2 }));
-          return x.t === 'lam' ? K('lam', { name: n2, dom: x.dom && go(x.dom), body: go(renamed) }) : K('pi', { name: n2, info: x.info, dom: go(x.dom), body: go(renamed) });
-        }
-        return x.t === 'lam' ? K('lam', { name: x.name, dom: x.dom && go(x.dom), body: go(x.body) }) : K('pi', { name: x.name, info: x.info, dom: go(x.dom), body: go(x.body) });
-      case 'app': return K('app', { f: go(x.f), a: go(x.a) });
-      case 'let':
-        if (x.name === name) return K('let', { name: x.name, ty: go(x.ty), val: go(x.val), body: x.body });
-        return K('let', { name: x.name, ty: go(x.ty), val: go(x.val), body: go(x.body) });
-      case 'sigma':
-        if (x.name === name) return K('sigma', { name: x.name, fst: go(x.fst), snd: x.snd });
-        return K('sigma', { name: x.name, fst: go(x.fst), snd: go(x.snd) });
-      case 'pair': return K('pair', { a: go(x.a), b: go(x.b) });
-      case 'fst': return K('fst', { p: go(x.p) });
-      case 'snd': return K('snd', { p: go(x.p) });
-      case 'succ': return K('succ', { p: go(x.p) });
-      case 'eq': return K('eq', { ty: go(x.ty), lhs: go(x.lhs), rhs: go(x.rhs) });
-      case 'natrec': return K('natrec', { motive: go(x.motive), zero: go(x.zero), succ: go(x.succ), target: go(x.target) });
-      case 'boolrec': return K('boolrec', { motive: go(x.motive), tt: go(x.tt), ff: go(x.ff), target: go(x.target) });
-      case 'eqrec': return K('eqrec', { motive: go(x.motive), h: go(x.h), target: go(x.target) });
-      default: return x;
-    }
-  };
-  return go(e);
-}
 
 const G = { consts: new Map(), metas: new Map(), metaN: 0 };
 const newMeta = () => { const id = G.metaN++; G.metas.set(id, null); return K('meta', { id }); };
@@ -387,185 +355,11 @@ const pruneM = (t) => {
   return t;
 };
 
-function hasStuckMeta(t) {
-  let found = false;
-  const go = (x) => {
-    if (found) return;
-    x = pruneM(x);
-    if (!x || typeof x !== 'object') return;
-    if (x.t === 'meta') { found = true; return; }
-    for (const v of Object.values(x)) if (v && typeof v === 'object') go(v);
-  };
-  go(t);
-  return found;
-}
 
 /* whnf 有兩檔: lazy (預設, 供 defeq: beta/iota/zeta + 可 beta 的 delta，不動 Pi 值的套用式以保剛性)
    full (供需看穿別名處: 另展開無自由變數的 Pi/Sort 值) */
-function whnf(e, full = false) {
-  let t = pruneM(e);
-  for (;;) {
-    t = pruneM(t);
-    if (!t) return t;
-    switch (t.t) {
-      case 'app': {
-        {
-          let h0 = t;
-          const sp = [];
-          while (h0.t === 'app') { sp.unshift(h0.a); h0 = pruneM(inst(h0.f)); }
-          if (h0.t === 'const' && sp.length) {
-            const c0 = G.consts.get(h0.name);
-            if (c0 && c0.rigid && sp.some(hasStuckMeta)) return t;
-          }
-        }
-        const f = whnf(t.f, full);
-        if (f.t === 'lam') { t = subst(f.body, f.name, t.a); continue; }
-        return K('app', { f, a: t.a });
-      }
-      case 'fst': {
-        const p = whnf(t.p, full);
-        if (p.t === 'pair') { t = p.a; continue; }
-        return K('fst', { p });
-      }
-      case 'snd': {
-        const p = whnf(t.p, full);
-        if (p.t === 'pair') { t = p.b; continue; }
-        return K('snd', { p });
-      }
-      case 'let': t = subst(t.body, t.name, t.val); continue;
-      case 'natrec': {
-        const n = whnf(t.target, full);
-        if (n.t === 'zero') { t = t.zero; continue; }
-        if (n.t === 'succ') { t = K('app', { f: K('app', { f: t.succ, a: n.p }), a: K('natrec', { motive: t.motive, zero: t.zero, succ: t.succ, target: n.p }) }); continue; }
-        if (n.t === 'natlit') {
-          if (n.v === 0) { t = t.zero; continue; }
-          let r = t.zero;
-          for (let i = 1; i <= n.v; i++) r = K('app', { f: K('app', { f: t.succ, a: K('natlit', { v: i - 1 }) }), a: r });
-          t = r; continue;
-        }
-        return K('natrec', { motive: t.motive, zero: t.zero, succ: t.succ, target: n });
-      }
-      case 'boolrec': {
-        const b = whnf(t.target, full);
-        if (b.t === 'true') { t = t.tt; continue; }
-        if (b.t === 'false') { t = t.ff; continue; }
-        return t;
-      }
-      case 'eqrec': {
-        const e2 = whnf(t.target, full);
-        if (e2.t === 'refl') { t = t.h; continue; }
-        return t;
-      }
-      case 'const': {
-        {
-          const c = G.consts.get(t.name);
-          // 值閉包即展開 (套用式的剛性由 app case 的 rigid+metas 把關)
-          if (c && c.value && freeVars(c.value).size === 0) { t = c.value; continue; }
-        }
-        return t;
-      }
-      default: return t;
-    }
-  }
-}
 
-function occurs(id, e) {
-  return checkDeep(e, id);
-}
-function checkDeep(e, id) {
-  e = pruneM(e);
-  if (!e || typeof e !== 'object') return false;
-  if (e.t === 'meta') return e.id === id;
-  return Object.values(e).some(v => v && typeof v === 'object' && checkDeep(v, id));
-}
 
-function defeq(a, b, fuel = 200) {
-  if (fuel <= 0) fail('defeq 超時 (可能是無窮展開)');
-  a = pruneM(a); b = pruneM(b);
-  if (a.t === 'meta') return assignMeta(a.id, b, fuel);
-  if (b.t === 'meta') return assignMeta(b.id, a, fuel);
-  { /* 剛性 type-former 同頭優先結構比對 (保一階合一；失敗則落回一般路徑) */
-    const headName = (x) => {
-      while (x && x.t === 'app') x = pruneM(inst(x.f));
-      return x && x.t === 'const' ? x.name : null;
-    };
-    const spine = (x) => { const r = []; while (x && x.t === 'app') { r.unshift(x.a); x = x.f; } return r; };
-    const ha = headName(a), hb = headName(b);
-    if (ha && ha === hb) {
-      const c = G.consts.get(ha);
-      if (c && c.rigid) {
-        const aa = spine(a), ab = spine(b);
-        if (aa.length === ab.length) {
-          const save = new Map(G.metas);
-          try {
-            aa.forEach((x, i) => defeq(x, ab[i], fuel - 1));
-            return;
-          } catch (e) { G.metas = save; }
-        }
-      }
-    }
-  }
-  a = whnf(a); b = whnf(b);
-  if (a.t === 'meta') return assignMeta(a.id, b, fuel);
-  if (b.t === 'meta') return assignMeta(b.id, a, fuel);
-  { /* Nat: Zero ≡ Lit 0；Lit n ≡ Succ Lit(n-1)；大數先比數值 */
-    const wa = whnf(a), wb = whnf(b);
-    if (wa.t === 'natlit' && wb.t === 'natlit') {
-      if (wa.v !== wb.v) fail('defeq: 數字不同');
-      return;
-    }
-    const un = (w) => {
-      if (w.t === 'zero' || (w.t === 'natlit' && w.v === 0)) return { zero: true };
-      if (w.t === 'natlit') return w.v > 10000 ? null : { pred: K('natlit', { v: w.v - 1 }) };
-      if (w.t === 'succ') return { pred: w.p };
-      return null;
-    };
-    const s1 = un(wa), s2 = un(wb);
-    if (s1 || s2) {
-      if (!s1 || !s2) fail('defeq: Nat 形狀不同');
-      if (s1.zero && s2.zero) return;
-      if (s1.zero || s2.zero) fail('defeq: Nat 形狀不同');
-      return defeq(s1.pred, s2.pred, fuel - 1);
-    }
-  }
-  if (a.t !== b.t) fail(`defeq: 形狀不同 (${a.t} vs ${b.t})`);
-  const rec = (x, y) => defeq(x, y, fuel - 1);
-  switch (a.t) {
-    case 'var': if (a.name !== b.name) fail(`defeq: 變數不同 ${a.name} vs ${b.name}`); return;
-    case 'const': if (a.name !== b.name) fail(`defeq: 常數不同`); return;
-    case 'sort': if (a.u !== b.u) fail('defeq: universe 不同'); return;
-    case 'zero': case 'true': case 'false': case 'refl': case 'nat': case 'bool': return;
-    case 'natlit': if (a.v !== b.v) fail('defeq'); return;
-    case 'succ': return rec(a.p, b.p);
-    case 'app': rec(a.f, b.f); return rec(a.a, b.a);
-    case 'lam': case 'pi': {
-      rec(a.dom, b.dom);
-      const n = fresh('x');
-      rec(subst(a.body, a.name, K('var', { name: n })), subst(b.body, b.name, K('var', { name: n })));
-      return;
-    }
-    case 'let': rec(a.val, b.val); return rec(subst(a.body, a.name, a.val), subst(b.body, b.name, b.val));
-    case 'sigma': rec(a.fst, b.fst); {
-      const n = fresh('x');
-      rec(subst(a.snd, a.name, K('var', { name: n })), subst(b.snd, b.name, K('var', { name: n })));
-      return;
-    }
-    case 'pair': rec(a.a, b.a); return rec(a.b, b.b);
-    case 'fst': return rec(a.p, b.p);
-    case 'snd': return rec(a.p, b.p);
-    case 'eq': rec(a.ty, b.ty); rec(a.lhs, b.lhs); return rec(a.rhs, b.rhs);
-    case 'natrec': rec(a.motive, b.motive); rec(a.zero, b.zero); rec(a.succ, b.succ); return rec(a.target, b.target);
-    case 'boolrec': rec(a.motive, b.motive); rec(a.tt, b.tt); rec(a.ff, b.ff); return rec(a.target, b.target);
-    case 'eqrec': rec(a.motive, b.motive); rec(a.h, b.h); return rec(a.target, b.target);
-    default: fail(`defeq: 未處理 ${a.t}`);
-  }
-}
-function assignMeta(id, e, fuel) {
-  e = pruneM(e);
-  if (e.t === 'meta' && e.id === id) return;
-  if (checkDeep(e, id)) fail('defeq: occurs check 失敗 (無窮型別)');
-  G.metas.set(id, e);
-}
 function inst(e) {
   e = pruneM(e);
   if (!e || typeof e !== 'object') return e;
@@ -575,18 +369,14 @@ function inst(e) {
   return o;
 }
 
-/* 一階 unify (供 apply)：刚性-刚性分解，flex 賦值 */
-function unify(a, b) {
-  try { defeq(a, b, 200); } catch (e) { fail('unify 失敗'); }
-}
+
 
 /* ═════════════════════════ Elaborator ═════════════════════════ */
 let localCtx = [];
 const lookupLocal = (n) => [...localCtx].reverse().find(e => e.name === n);
 const lookupConst = (n) => G.consts.get(n);
 
-const SORT = (u) => K('sort', { u });
-const isSort = (t) => { const w = whnf(inst(t), true); return w && w.t === 'sort' ? w.u : -1; };
+const isSort = (t) => { const w = W(inst(t), true); return w && w.t === 'sort' ? w.u : -1; };
 
 function elabInfer(e) {
   switch (e.t) {
@@ -609,15 +399,15 @@ function elabInfer(e) {
     case 'lam': fail(`第 ${e.line} 行: fun 需要期望型別或標註參數`);
     case 'pi': {
       const d = elabType(e.dom);
-      const lv = sortOfK(d);
+      const lv = SK(d);
       const nm = e.name === '_' ? fresh('x') : e.name;
-      const rv = withLocal(nm, d, () => sortOfK(elabType(e.body)));
+      const rv = withLocal(nm, d, () => SK(elabType(e.body)));
       return SORT(piSort(lv, rv));
     }
     case 'app': return elabApp(e, null).ty;
     case 'eq': {
       const ka = elabTerm(e.a);
-      const A = inferK(ka);
+      const A = IK(ka);
       const b = elabCheck(e.b, A);
       return K('eq', { ty: A, lhs: ka, rhs: b });
     }
@@ -659,7 +449,7 @@ function elabTerm(e) {
     case 'app': return elabApp(e, null).tm;
     case 'eq': {
       const ka = elabTerm(e.a);
-      const A = inferK(ka);
+      const A = IK(ka);
       return K('eq', { ty: A, lhs: ka, rhs: elabCheck(e.b, A) });
     }
     case 'rfl': return K('refl', {});
@@ -668,62 +458,11 @@ function elabTerm(e) {
 }
 
 /* kernel 項的型別推論 (供 sortOf / 單遍 elaboration；僅用於已檢查過的項) */
-function inferK(e) {
-  e = pruneM(inst(e));
-  if (!e || typeof e !== 'object') fail('inferK: 非法項');
-  switch (e.t) {
-    case 'var': { const l = lookupLocal(e.name); if (!l) fail(`未定義 "${e.name}"`); return inst(l.type); }
-    case 'const': { const c = G.consts.get(e.name); if (!c) fail(`未定義 "${e.name}"`); return inst(c.type); }
-    case 'sort': return SORT(e.u + 1);
-    case 'nat': case 'bool': return SORT(1);
-    case 'zero': case 'natlit': return K('nat', {});
-    case 'succ': return K('pi', { name: '_', info: 'exp', dom: K('nat', {}), body: K('nat', {}) });
-    case 'true': case 'false': return K('bool', {});
-    case 'refl': fail('rfl 需要期望型別');
-    case 'lam': {
-      if (!e.dom) fail('inferK: lambda 缺定義域');
-      const b = withLocal(e.name, e.dom, () => inferK(e.body));
-      return K('pi', { name: e.name, info: 'exp', dom: e.dom, body: b });
-    }
-    case 'app': {
-      let f = whnf(inferK(e.f));
-      if (f.t !== 'pi') fail('inferK: 非函數套用');
-      return inst(subst(f.body, f.name, e.a));
-    }
-    case 'pi': case 'sigma': {
-      const m = sortOfK(e.dom ?? e.fst);
-      const nm = e.name;
-      const b = withLocal(nm, e.dom ?? e.fst, () => sortOfK(e.body ?? e.snd));
-      return SORT(piSort(m, b));
-    }
-    case 'pair': return K('sigma', { name: '_', fst: inferK(e.a), snd: inferK(e.b) });
-    case 'fst': { const t = whnf(inferK(e.p)); if (t.t !== 'sigma') fail('fst 需要 Sigma'); return t.fst; }
-    case 'snd': { const t = whnf(inferK(e.p)); if (t.t !== 'sigma') fail('snd 需要 Sigma'); return inst(subst(t.snd, t.name, K('fst', { p: e.p }))); }
-    case 'let': return withLocal(e.name, e.ty, () => inferK(e.body));
-    case 'eq': return SORT(0);
-    case 'natrec': return K('app', { f: e.motive, a: e.target });
-    case 'boolrec': return K('app', { f: e.motive, a: e.target });
-    case 'eqrec': return K('app', { f: e.motive, a: K('zero', {}) });
-    case 'meta': return null;
-    default: fail(`inferK: 未處理 ${e.t}`);
-  }
-}
 /* Pi/Sigma 形成規則：codomain 為 Prop 必落 Prop (impredicative)；否則取 max；定義域未知且 codomain 非 Prop 則報錯 */
-function piSort(m, n) {
-  if (n === 0) return 0;
-  if (m === -1 || n === -1 || n === null) fail('binder 請標註型別 (無法推斷 sort)');
-  return Math.max(m, n);
-}
-function sortOfK(ty) {
-  const t = whnf(inferK(ty), true);
-  if (t === null || t === undefined) return -1;
-  if (t.t !== 'sort') fail('需要 Sort (此處應為型別)');
-  return t.u;
-}
 /* elaboration 成 kernel 後驗證形狀確為型別；含未定元則放行，由命令結束時的歧義檢查把關 */
 function elabType(surface) {
   const k = elabCheck(surface, null);
-  const w = whnf(inst(k));
+  const w = W(inst(k));
   const okShape = w && ['sort', 'pi', 'sigma', 'nat', 'bool', 'eq', 'const', 'var', 'meta', 'app'].includes(w.t);
   if (!okShape) fail('此處應為型別');
   return k;
@@ -736,40 +475,40 @@ function withLocal(name, type, fn) {
 
 function elabCheck(e, expected, isType = false) {
   if (e.t === 'lam' && expected) {
-    const w = whnf(inst(expected), true);
+    const w = W(inst(expected), true);
     if (w.t !== 'pi') {
       fail(`第 ${e.line} 行: fun 的期望型別不是 Pi`);
     }
     const nm = e.name === '_' ? fresh('x') : e.name;
     const dom = e.ty ? elabCheck(e.ty, w.dom) : w.dom;
-    try { defeq(dom, w.dom); } catch (err) { fail(`第 ${e.line} 行: 參數型別不符`); }
+    try { D(dom, w.dom); } catch (err) { fail(`第 ${e.line} 行: 參數型別不符`); }
     const body = withLocal(nm, dom, () => elabCheck(e.body, inst(subst(w.body, w.name, K('var', { name: nm })))));
     return K('lam', { name: nm, dom, body });
   }
   if (e.t === 'num' && expected) {
-    const w = whnf(inst(expected), true);
-    if (w.t === 'meta') { assignMeta(w.id, K('nat', {})); return K('natlit', { v: e.v }); }
+    const w = W(inst(expected), true);
+    if (w.t === 'meta') { mset(w.id, K('nat', {})); return K('natlit', { v: e.v }); }
     if (!(w.t === 'nat' || (w.t === 'const' && w.name === 'Nat'))) fail(`第 ${e.line} 行: 數字需要 Nat 型別`);
     return K('natlit', { v: e.v });
   }
   if (e.t === 'rfl' && expected) {
-    const w = whnf(inst(expected), true);
+    const w = W(inst(expected), true);
     if (w.t !== 'eq') fail(`第 ${e.line} 行: rfl 需要 Eq 型別`);
-    try { defeq(w.lhs, w.rhs); } catch (err) { fail(`第 ${e.line} 行: rfl 兩邊定義上不相等`); }
+    try { D(w.lhs, w.rhs); } catch (err) { fail(`第 ${e.line} 行: rfl 兩邊定義上不相等`); }
     return K('refl', {});
   }
   if (e.t === 'hole' && expected) return newMeta();
   if (e.t === 'app') return elabApp(e, expected).tm;
   if (expected) {
     const inferred = elabInfer(e);
-    const wExp = whnf(inst(expected));
-    const wInf = whnf(inst(inferred));
+    const wExp = W(inst(expected));
+    const wInf = W(inst(inferred));
     if (wExp.t === 'sort' && wInf.t !== 'sort') {
       let u = -1;
-      try { u = sortOfK(inferred); } catch (err) { fail(`第 ${e.line} 行: 此處應為型別`); }
+      try { u = SK(inferred); } catch (err) { fail(`第 ${e.line} 行: 此處應為型別`); }
       if (u !== -1 && u !== null && u > wExp.u) fail(`第 ${e.line} 行: universe 不合 (需要 ${showK(expected)})`);
     } else {
-      try { defeq(inferred, expected); } catch (err) {
+      try { D(inferred, expected); } catch (err) {
         fail(`第 ${e.line} 行: 型別不符 ${err.message}`);
       }
     }
@@ -787,50 +526,50 @@ function elabApp(e, expected) {
   const argv = [];
   const deferredRfl = [];
   for (const a of args) {
-    fty = whnf(inst(fty), true);
+    fty = W(inst(fty), true);
     while (fty.t === 'pi' && fty.info === 'imp') {
       const m = newMeta();
       fterm = K('app', { f: fterm, a: m });
-      fty = whnf(inst(subst(fty.body, fty.name, m)), true);
+      fty = W(inst(subst(fty.body, fty.name, m)), true);
     }
     if (fty.t !== 'pi') fail(`第 ${e.line} 行: 參數太多 (非函數被套用)`);
-    if (a.t === 'rfl' && whnf(inst(fty.dom)).t !== 'eq') {
+    if (a.t === 'rfl' && W(inst(fty.dom)).t !== 'eq') {
       const m = newMeta();
       const dom = fty.dom;
       argv.push(m);
       fterm = K('app', { f: fterm, a: m });
-      fty = whnf(inst(subst(fty.body, fty.name, m)));
+      fty = W(inst(subst(fty.body, fty.name, m)));
       deferredRfl.push({ m, dom, line: a.line });
       continue;
     }
     const av = elabCheck(a, fty.dom);
     argv.push(av);
     fterm = K('app', { f: fterm, a: av });
-    fty = whnf(inst(subst(fty.body, fty.name, av)));
+    fty = W(inst(subst(fty.body, fty.name, av)));
   }
   while (fty.t === 'pi' && fty.info === 'imp') {
     const m = newMeta();
     fterm = K('app', { f: fterm, a: m });
-    fty = whnf(inst(subst(fty.body, fty.name, m)), true);
+    fty = W(inst(subst(fty.body, fty.name, m)), true);
   }
   if (expected) {
-    const wExp = whnf(inst(expected));
-    const wInf = whnf(inst(fty));
+    const wExp = W(inst(expected));
+    const wInf = W(inst(fty));
     if (wExp.t === 'sort' && wInf.t !== 'sort') {
       let u = -1;
-      try { u = sortOfK(fty); } catch (err) { fail(`第 ${e.line} 行: 此處應為型別`); }
+      try { u = SK(fty); } catch (err) { fail(`第 ${e.line} 行: 此處應為型別`); }
       if (u !== -1 && u !== null && u > wExp.u) fail(`第 ${e.line} 行: universe 不合`);
     } else {
-      try { defeq(fty, expected); } catch (err) {
+      try { D(fty, expected); } catch (err) {
         fail(`第 ${e.line} 行: 回傳型別不符`);
       }
     }
   }
   for (const d of deferredRfl) {
-    const dd = whnf(inst(d.dom));
+    const dd = W(inst(d.dom));
     if (dd.t !== 'eq') fail(`第 ${d.line} 行: rfl 需要 Eq 型別`);
-    try { defeq(dd.lhs, dd.rhs); } catch (err) { fail(`第 ${d.line} 行: rfl 兩邊定義上不相等`); }
-    assignMeta(d.m.id, K('refl', {}), 200);
+    try { D(dd.lhs, dd.rhs); } catch (err) { fail(`第 ${d.line} 行: rfl 兩邊定義上不相等`); }
+    mset(d.m.id, K('refl', {}), 200);
   }
   return { ty: fty, tm: fterm };
 }
@@ -840,10 +579,10 @@ function elabRecursor(name, args, expected, line) {
   const checkMotive = (motive, domTy, what) => {
     motive = pruneM(inst(motive));
     if (!motive || motive.t !== 'lam') fail(`第 ${line} 行: ${what} motive 必須是 fun`);
-    try { defeq(motive.dom, domTy); } catch (err) { fail(`第 ${line} 行: ${what} motive 定義域不符`); }
+    try { D(motive.dom, domTy); } catch (err) { fail(`第 ${line} 行: ${what} motive 定義域不符`); }
     const mv = fresh('m');
     let bs = -1;
-    try { bs = withLocal(mv, motive.dom, () => sortOfK(inst(subst(motive.body, motive.name, K('var', { name: mv }))))) ; } catch (e) { bs = -1; }
+    try { bs = withLocal(mv, motive.dom, () => SK(inst(subst(motive.body, motive.name, K('var', { name: mv }))))) ; } catch (e) { bs = -1; }
     if (bs < 0) fail(`第 ${line} 行: ${what} motive 值域須為 Sort`);
     return K('pi', { name: motive.name, info: 'exp', dom: motive.dom, body: motive.body });
   };
@@ -858,7 +597,7 @@ function elabRecursor(name, args, expected, line) {
     const succ = elabCheck(args[2], sk);
     const target = elabCheck(args[3], natTy);
     const res = M(target);
-    if (expected) { try { defeq(res, expected); } catch (err) { fail(`第 ${line} 行: Nat.rec 結果型別不符`); } }
+    if (expected) { try { D(res, expected); } catch (err) { fail(`第 ${line} 行: Nat.rec 結果型別不符`); } }
     return { ty: res, tm: K('natrec', { motive, zero, succ, target }) };
   }
   if (name === 'Bool.rec') {
@@ -870,7 +609,7 @@ function elabRecursor(name, args, expected, line) {
     const ff = elabCheck(args[2], M(K('false', {})));
     const target = elabCheck(args[3], boolTy);
     const res = M(target);
-    if (expected) { try { defeq(res, expected); } catch (err) { fail(`第 ${line} 行: Bool.rec 結果型別不符`); } }
+    if (expected) { try { D(res, expected); } catch (err) { fail(`第 ${line} 行: Bool.rec 結果型別不符`); } }
     return { ty: res, tm: K('boolrec', { motive, tt, ff, target }) };
   }
   if (name === 'Eq.subst') {
@@ -880,13 +619,13 @@ function elabRecursor(name, args, expected, line) {
     if (rest.length > 2) {
       const Am = newMeta(), Sm = newMeta();
       const Pm0 = elabCheck(rest.shift(), K('pi', { name: '_', info: 'exp', dom: Am, body: Sm }));
-      const unw = whnf(pruneM(inst(Pm0)));
+      const unw = W(pruneM(inst(Pm0)));
       if (!unw || unw.t !== 'lam') fail(`第 ${line} 行: Eq.subst motive 必須是 fun`);
       Pm = unw;
       A = unw.dom;
       const mv = fresh('m');
       let bs = -1;
-      try { bs = withLocal(mv, A, () => sortOfK(inst(subst(unw.body, unw.name, K('var', { name: mv }))))) ; } catch (e) { bs = -1; }
+      try { bs = withLocal(mv, A, () => SK(inst(subst(unw.body, unw.name, K('var', { name: mv }))))) ; } catch (e) { bs = -1; }
       if (bs < 0) fail(`第 ${line} 行: Eq.subst motive 值域須為 Sort`);
     } else fail(`第 ${line} 行: Eq.subst 需要寫明 motive (如 Eq.subst (fun z => ...) h v)`);
     const aM = newMeta(), bM = newMeta();
@@ -895,7 +634,7 @@ function elabRecursor(name, args, expected, line) {
     const hTm = elabCheck(rest.shift(), K('app', { f: Pm, a }));
     if (rest.length) fail(`第 ${line} 行: Eq.subst 參數太多`);
     const res = K('app', { f: Pm, a: b });
-    if (expected) { try { defeq(res, expected); } catch (err) { fail(`第 ${line} 行: Eq.subst 結果型別不符`); } }
+    if (expected) { try { D(res, expected); } catch (err) { fail(`第 ${line} 行: Eq.subst 結果型別不符`); } }
     return { ty: res, tm: K('eqrec', { motive: Pm, h: hTm, target: eTm }) };
   }
   fail('unknown recursor');
@@ -950,15 +689,9 @@ def congrArg {A B : Type} (f : A -> B) {x y : A} (h : x = y) : f x = f y := Eq.s
 /* ═════════════════════════ Tactics ═════════════════════════ */
 function goalType(g) { return inst(g.goal); }
 function tryRfl(g) {
-  const w = whnf(goalType(g), true);
+  const w = W(goalType(g), true);
   if (w.t !== 'eq') return false;
-  try { defeq(w.lhs, w.rhs); return true; } catch (e) { return false; }
-}
-function stripPis(ty, nMax = 1e9) {
-  const out = [];
-  let t = whnf(inst(ty));
-  while (t.t === 'pi' && out.length < nMax) { out.push(t); t = whnf(inst(subst(t.body, t.name, newMeta()))); }
-  return { params: out, concl: t };
+  try { D(w.lhs, w.rhs); return true; } catch (e) { return false; }
 }
 function runTac(tac, goals) {
   if (!goals.length) fail('沒有剩餘 goal');
@@ -975,9 +708,9 @@ function runTacInner(tac, goals) {
   const R = (...gs) => [...gs, ...rest];
   switch (tac.t) {
     case 'rfl': {
-      const w = whnf(goalType(g));
+      const w = W(goalType(g));
       if (w.t !== 'eq') fail('rfl: goal 不是等式');
-      try { defeq(w.lhs, w.rhs); } catch (e) {
+      try { D(w.lhs, w.rhs); } catch (e) {
         fail(`rfl 失敗: 兩邊定義上不相等`);
       }
       return rest;
@@ -988,22 +721,22 @@ function runTacInner(tac, goals) {
     }
     case 'apply': {
       const fty = elabInfer(tac.e);
-      let t = whnf(inst(fty));
-      while (t.t === 'pi' && t.info === 'imp') t = whnf(inst(subst(t.body, t.name, newMeta())));
+      let t = W(inst(fty));
+      while (t.t === 'pi' && t.info === 'imp') t = W(inst(subst(t.body, t.name, newMeta())));
       const premises = [];
-      t = whnf(inst(t));
+      t = W(inst(t));
       while (t.t === 'pi') {
-        if (t.info === 'imp') { t = whnf(inst(subst(t.body, t.name, newMeta()))); continue; }
+        if (t.info === 'imp') { t = W(inst(subst(t.body, t.name, newMeta()))); continue; }
         const m = newMeta();
         premises.push({ dom: t.dom, meta: m });
-        t = whnf(inst(subst(t.body, t.name, m)));
+        t = W(inst(subst(t.body, t.name, m)));
       }
       try { unify(t, goalType(g)); } catch (e) { fail(`apply 失敗: 結論無法合一`); }
       const newGoals = [];
       for (const p of premises) {
         const d = inst(p.dom);
         let s = -1;
-        try { s = sortOfK(d); } catch (e) { s = -1; }
+        try { s = SK(d); } catch (e) { s = -1; }
         if (s >= 0) newGoals.push({ locals: g.locals, goal: d });
         else if (pruneM(p.meta).t === 'meta') fail('apply 失敗: 無法推斷隱含參數');
       }
@@ -1014,7 +747,7 @@ function runTacInner(tac, goals) {
       const gs = [];
       void gs;
       for (const name of tac.names) {
-        const w = whnf(goalType(cur), true);
+        const w = W(goalType(cur), true);
         if (w.t !== 'pi') fail(`intro 失敗: goal 不是 Pi/forall`);
         cur = { locals: [...cur.locals, { name, type: w.dom }], goal: inst(subst(w.body, w.name, K('var', { name }))) };
       }
@@ -1022,7 +755,7 @@ function runTacInner(tac, goals) {
     }
     case 'assumption': {
       for (const l of [...g.locals].reverse()) {
-        try { defeq(l.type, goalType(g)); return rest; } catch (e) { void e; }
+        try { D(l.type, goalType(g)); return rest; } catch (e) { void e; }
       }
       fail('assumption 失敗: 上下文無符合者');
     }
@@ -1033,16 +766,16 @@ function runTacInner(tac, goals) {
     case 'rw': {
       let cur = goalType(g);
       for (const r of tac.rules) {
-        const ht = whnf(elabInfer(r.e), true);
+        const ht = W(elabInfer(r.e), true);
         let t = ht;
-        while (t.t === 'pi') t = whnf(inst(subst(t.body, t.name, newMeta())));
+        while (t.t === 'pi') t = W(inst(subst(t.body, t.name, newMeta())));
         if (t.t !== 'eq') fail('rw 需要等式');
         let lhs = inst(t.lhs), rhs = inst(t.rhs);
         if (r.rev) { const tmp = lhs; lhs = rhs; rhs = tmp; }
         cur = rewriteOnce(cur, lhs, rhs, tac);
       }
-      const w = whnf(cur, true);
-      if (w.t === 'eq') { try { defeq(w.lhs, w.rhs); return rest; } catch (e) { void e; } }
+      const w = W(cur, true);
+      if (w.t === 'eq') { try { D(w.lhs, w.rhs); return rest; } catch (e) { void e; } }
       return R({ locals: g.locals, goal: cur });
     }
     case 'simp': {
@@ -1050,9 +783,9 @@ function runTacInner(tac, goals) {
       for (let round = 0; round < 64; round++) {
         let changed = false;
         for (const l of tac.lemmas) {
-          const ht = whnf(elabInfer(l), true);
+          const ht = W(elabInfer(l), true);
           let t = ht;
-          while (t.t === 'pi') t = whnf(inst(subst(t.body, t.name, newMeta())));
+          while (t.t === 'pi') t = W(inst(subst(t.body, t.name, newMeta())));
           if (t.t !== 'eq') fail('simp 需要等式引理');
           try {
             const n2 = rewriteOnce(cur, inst(t.lhs), inst(t.rhs), tac);
@@ -1061,14 +794,14 @@ function runTacInner(tac, goals) {
         }
         if (!changed) break;
       }
-      const w = whnf(cur, true);
-      if (w.t === 'eq') { try { defeq(w.lhs, w.rhs); return rest; } catch (e) { void e; } }
+      const w = W(cur, true);
+      if (w.t === 'eq') { try { D(w.lhs, w.rhs); return rest; } catch (e) { void e; } }
       return R({ locals: g.locals, goal: cur });
     }
     case 'induction': {
       const idx = g.locals.findIndex(l => l.name === tac.name);
       if (idx < 0) fail(`induction: 上下文無 "${tac.name}"`);
-      const nt = whnf(g.locals[idx].type, true);
+      const nt = W(g.locals[idx].type, true);
       if (nt.t !== 'nat') fail('induction 只能對 Nat (需先 intro 到上下文)');
       const before = g.locals.slice(0, idx);
       const reverted = g.locals.slice(idx);
@@ -1094,14 +827,14 @@ function rewriteOnce(term, lhs, rhs, tac) {
     x = inst(x);
     const save = new Map(G.metas);
     try {
-      defeq(x, lhs);
+      D(x, lhs);
       matched = true;
       return inst(rhs);
     } catch (e) {
       G.metas = save;
     }
     if (!x || typeof x !== 'object') return x;
-    const w = whnf(x);
+    const w = W(x);
     if (['var', 'const', 'sort', 'zero', 'true', 'false', 'refl', 'natlit', 'meta'].includes(w.t)) return x;
     const o = Array.isArray(w) ? [] : {};
     for (const [k, v] of Object.entries(w)) o[k] = v && typeof v === 'object' ? go(v) : v;
@@ -1155,6 +888,7 @@ function doCommand(cmd) {
     doCommandInner(cmd);
   } catch (e) {
     if (e instanceof L0Error) fail(`${e.message}【於 ${label}】`);
+    if (e instanceof kernel.KError) fail(`內部錯誤 (kernel)：${e.message}【於 ${label}】`);
     throw e;
   }
 }
@@ -1267,17 +1001,26 @@ function doCommandInner(cmd) {
     const c2 = collectPis(ev);
     const closed = closeOver(c2.params, c2.body.t, c2.body.v);
     checkNoStuckMetas(closed.ty, closed.val);
-    const nm0 = cmd.name || `example${freshN}`;
+    const nm0 = cmd.name || fresh('example');
     const ax0 = new Set(G._axLog);
     axiomsIn(closed.val, ax0);
+    const sty = inst(closed.ty), sval = closed.val && inst(closed.val);
     let rigid = false;
     try {
       let n = 0, ty = closed.ty;
-      for (;;) { const w = whnf(ty); if (!w || w.t !== 'pi') break; n++; ty = w.body; }
-      if (n > 0) { const c = whnf(ty); rigid = !!c && c.t === 'sort'; }
+      for (;;) { const w = W(ty); if (!w || w.t !== 'pi') break; n++; ty = w.body; }
+      if (n > 0) { const c = W(ty); rigid = !!c && c.t === 'sort'; }
     } catch (e) { rigid = false; }
-    progDefs.push({ name: nm0, type: closed.ty, value: closed.val, kind: isThm ? 'thm' : 'def' });
-    G.consts.set(nm0, { type: closed.ty, value: closed.val, kind: isThm ? 'thm' : 'def', axioms: ax0, rigid });
+    progDefs.push({ name: nm0, type: sty, value: sval, kind: isThm ? 'thm' : 'def' });
+    G.consts.set(nm0, { type: sty, value: sval, kind: isThm ? 'thm' : 'def', axioms: ax0, rigid });
+    try {
+      kernel.checkDef(sty, sval, G.consts);
+    } catch (e) {
+      G.consts.delete(nm0);
+      progDefs.pop();
+      if (e instanceof kernel.KError) fail(`kernel 重查失敗 (內部錯誤)：${e.message}`);
+      throw e;
+    }
     return;
   }
   if (cmd.tacs) {
@@ -1293,7 +1036,7 @@ function doCommandInner(cmd) {
     const c2 = collectPis(ev);
     const closed = closeOver(c2.params, c2.body.t, null);
     checkNoStuckMetas(closed.ty, null);
-    const nm = cmd.name || `example${freshN}`;
+    const nm = cmd.name || fresh('example');
     const ax = new Set(G._axLog);
     progDefs.push({ name: nm, type: closed.ty, value: K('refl', {}), kind: 'thm' });
     G.consts.set(nm, { type: closed.ty, value: K('refl', {}), kind: 'thm', axioms: ax });
@@ -1428,7 +1171,7 @@ function evalKernel(surface) {
 
 /* ═════════════════════════ Main ═════════════════════════ */
 function resetAll() {
-  G.consts = new Map(); G.metas = new Map(); G.metaN = 0; freshN = 0;
+  G.consts = new Map(); G.metas = new Map(); G.metaN = 0;
   localCtx = []; OUT.length = 0; progDefs.length = 0; tmpC.n = 0;
   kernelConsts();
   for (const ch of chunk(PRELUDE_SRC)) doCommand(parseCommand(ch));
@@ -1465,6 +1208,7 @@ if (require.main === module) {
     }
   } catch (e) {
     if (e instanceof L0Error) { console.error('編譯錯誤: ' + e.message); process.exit(1); }
+    if (e instanceof kernel.KError) { console.error('內部錯誤 (kernel): ' + e.message); process.exit(2); }
     console.error('編譯錯誤: ' + e.message); process.exit(1);
   }
 }

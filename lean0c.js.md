@@ -1,7 +1,10 @@
 # lean0c.js — 說明文件
 
-`lean0c.js` 是**微型 Lean4**：依賴型別核心（數學建構＋定理證明）→ LBC v1
+`lean0c.js` 是**微型 Lean4 的 elaborator**（手法、tactic、codegen、命令）：
+依賴型別核心（數學建構＋定理證明）→ LBC v1
 （經 Scheme 核心＋`lispc.js`，用 `vm.js` 執行）。VM 完全不需修改。
+**可信任的檢查在 `lean0kernel.js`**（見該文件）；本檔每存一個定義，
+都以 `kernel.checkDef` 重查（不合即內部錯誤），tactic 證明則存型別＋公理依賴。
 
 ## 1. 用法
 
