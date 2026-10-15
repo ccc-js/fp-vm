@@ -1018,7 +1018,9 @@ function doCommandInner(cmd) {
     } catch (e) {
       G.consts.delete(nm0);
       progDefs.pop();
-      if (e instanceof kernel.KError) fail(`kernel 重查失敗 (內部錯誤)：${e.message}`);
+      if (e instanceof kernel.KError) {
+        fail(`kernel 重查失敗 (內部錯誤)：${e.message}`);
+      }
       throw e;
     }
     return;

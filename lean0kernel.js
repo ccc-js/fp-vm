@@ -411,9 +411,22 @@ function checkK(e, expected, ctx, consts, flex = null) {
   if ((e.t === 'true' || e.t === 'false') && exp && exp.t === 'bool') return;
   if (e.t === 'app') {
     let f = e, sargs = [];
-    while (f.t === 'app') { sargs.unshift(f.a); f = f.f; }
-    if (f.t === 'const' && ['Nat.rec', 'Bool.rec', 'Eq.subst'].includes(f.name)) {
-      checkRecApp(f.name, sargs, exp, ctx, consts, flex);
+    while (f.t === 'app') { sargs.unshift(f.a); f = deref(f.f, flex); }
+    if (f.t === 'lam' && sargs.length) {
+      let r = subst(f.body, f.name, sargs.shift());
+      for (const a of sargs) r = K('app', { f: r, a });
+      return checkK(r, expected, ctx, consts, flex);
+    }
+    if (f.t === 'const' && f.name === 'Nat.rec' && sargs.length === 4) {
+      checkRecNode(K('natrec', { motive: sargs[0], zero: sargs[1], succ: sargs[2], target: sargs[3] }), exp, ctx, consts, flex);
+      return;
+    }
+    if (f.t === 'const' && f.name === 'Bool.rec' && sargs.length === 4) {
+      checkRecNode(K('boolrec', { motive: sargs[0], tt: sargs[1], ff: sargs[2], target: sargs[3] }), exp, ctx, consts, flex);
+      return;
+    }
+    if (f.t === 'const' && f.name === 'Eq.subst' && sargs.length === 6) {
+      checkRecNode(K('eqrec', { motive: sargs[1], h: sargs[5], target: sargs[4] }), exp, ctx, consts, flex);
       return;
     }
     let fty = inferK(f, ctx, consts, flex);

@@ -1,0 +1,48 @@
+-- 04_group.l0 : 抽象群論 —— 左單位元＋左逆元推出右單位元、對合、左消去、逆之積
+-- 執行: node lean0c.js lean0/04_group.l0
+--
+-- 風格說明：公理全顯式傳參 (micro-Lean 無 section/variable)；
+-- 內層改寫一律用 Eq.trans＋congrArg＋Eq.symm 的顯式項 (比 rw 位置精確)。
+
+theorem right_inv (G : Type) (mul : G -> G -> G) (one : G) (inv : G -> G) (h_assoc : forall (a b c : G), mul (mul a b) c = mul a (mul b c)) (h_one : forall (a : G), mul one a = a) (h_inv : forall (a : G), mul (inv a) a = one) (x : G) : mul x (inv x) = one :=
+  Eq.trans (Eq.symm (h_one (mul x (inv x))))
+  (Eq.trans (congrArg (fun t => mul t (mul x (inv x))) (Eq.symm (h_inv (inv x))))
+  (Eq.trans (h_assoc (inv (inv x)) (inv x) (mul x (inv x)))
+  (Eq.trans (congrArg (fun t => mul (inv (inv x)) t) (Eq.symm (h_assoc (inv x) x (inv x))))
+  (Eq.trans (congrArg (fun t => mul (inv (inv x)) t) (congrArg (fun t => mul t (inv x)) (h_inv x)))
+  (Eq.trans (congrArg (fun t => mul (inv (inv x)) t) (h_one (inv x)))
+  (h_inv (inv x)))))))
+
+theorem mul_one (G : Type) (mul : G -> G -> G) (one : G) (inv : G -> G) (h_assoc : forall (a b c : G), mul (mul a b) c = mul a (mul b c)) (h_one : forall (a : G), mul one a = a) (h_inv : forall (a : G), mul (inv a) a = one) (a : G) : mul a one = a :=
+  Eq.trans (congrArg (fun t => mul a t) (Eq.symm (h_inv a)))
+  (Eq.trans (Eq.symm (h_assoc a (inv a) a))
+  (Eq.trans (congrArg (fun t => mul t a) (right_inv G mul one inv h_assoc h_one h_inv a))
+  (h_one a)))
+
+theorem inv_inv (G : Type) (mul : G -> G -> G) (one : G) (inv : G -> G) (h_assoc : forall (a b c : G), mul (mul a b) c = mul a (mul b c)) (h_one : forall (a : G), mul one a = a) (h_inv : forall (a : G), mul (inv a) a = one) (a : G) : inv (inv a) = a :=
+  Eq.trans (Eq.symm (mul_one G mul one inv h_assoc h_one h_inv (inv (inv a))))
+  (Eq.trans (congrArg (fun t => mul (inv (inv a)) t) (Eq.symm (h_inv a)))
+  (Eq.trans (Eq.symm (h_assoc (inv (inv a)) (inv a) a))
+  (Eq.trans (congrArg (fun t => mul t a) (h_inv (inv a)))
+  (h_one a))))
+
+theorem left_cancel (G : Type) (mul : G -> G -> G) (one : G) (inv : G -> G) (h_assoc : forall (a b c : G), mul (mul a b) c = mul a (mul b c)) (h_one : forall (a : G), mul one a = a) (h_inv : forall (a : G), mul (inv a) a = one) (u x y : G) (h : mul u x = mul u y) : x = y :=
+  Eq.trans (Eq.symm (h_one x))
+  (  Eq.trans (congrArg (fun t => mul t x) (Eq.symm (h_inv u)))
+  (Eq.trans (h_assoc (inv u) u x)
+  (Eq.trans (congrArg (fun t => mul (inv u) t) h)
+  (Eq.trans (Eq.symm (h_assoc (inv u) u y))
+  (Eq.trans (congrArg (fun t => mul t y) (h_inv u))
+  (h_one y)))))))
+
+theorem prod_inv_core (G : Type) (mul : G -> G -> G) (one : G) (inv : G -> G) (h_assoc : forall (a b c : G), mul (mul a b) c = mul a (mul b c)) (h_one : forall (a : G), mul one a = a) (h_inv : forall (a : G), mul (inv a) a = one) (a b : G) : mul (mul a b) (mul (inv b) (inv a)) = one :=
+  Eq.trans (h_assoc a b (mul (inv b) (inv a)))
+  (Eq.trans (congrArg (fun t => mul a t) (Eq.symm (h_assoc b (inv b) (inv a))))
+  (Eq.trans (congrArg (fun t => mul a t) (congrArg (fun t => mul t (inv a)) (right_inv G mul one inv h_assoc h_one h_inv b)))
+  (Eq.trans (congrArg (fun t => mul a t) (h_one (inv a)))
+  (right_inv G mul one inv h_assoc h_one h_inv a))))
+
+theorem inv_mul (G : Type) (mul : G -> G -> G) (one : G) (inv : G -> G) (h_assoc : forall (a b c : G), mul (mul a b) c = mul a (mul b c)) (h_one : forall (a : G), mul one a = a) (h_inv : forall (a : G), mul (inv a) a = one) (a b : G) : inv (mul a b) = mul (inv b) (inv a) :=
+  left_cancel G mul one inv h_assoc h_one h_inv (mul a b) (inv (mul a b)) (mul (inv b) (inv a))
+  (Eq.trans (right_inv G mul one inv h_assoc h_one h_inv (mul a b))
+  (Eq.symm (prod_inv_core G mul one inv h_assoc h_one h_inv a b)))
