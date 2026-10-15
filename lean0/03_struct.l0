@@ -1,0 +1,15 @@
+-- 03_struct.l0 : 結構 —— Point 的建構、投影與求值
+-- 執行: node lean0c.js lean0/03_struct.l0
+
+structure Point :=
+  (x : Nat)
+  (y : Nat)
+
+def origin : Point := Point.mk 3 4
+
+#check Point.mk
+#check Point.x
+#eval Point.x origin
+#eval Point.y origin
+
+example : Point.x origin = 3 := rfl

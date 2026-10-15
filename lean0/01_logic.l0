@@ -1,0 +1,24 @@
+-- 01_logic.l0 : 命題邏輯 —— And/Or/Exists 的項式證明 + intro/apply/exact
+-- 執行: node lean0c.js lean0/01_logic.l0
+
+theorem and_comm {A B : Prop} (h : And A B) : And B A :=
+  And.intro (And.right h) (And.left h)
+
+theorem or_comm {A B : Prop} (h : Or A B) : Or B A :=
+  h (Or B A) (fun a => Or.inr a) (fun b => Or.inl b)
+
+theorem modus_ponens {A B : Prop} (h1 : A -> B) (h2 : A) : B := h1 h2
+
+theorem ex_intro : Exists Nat (fun n => n = 0) := Exists.intro 0 rfl
+
+example (A B : Prop) (h : And A B) : B := by
+  exact And.right h
+
+example (A B : Prop) : A -> B -> And A B := by
+  intro a
+  intro b
+  apply And.intro
+  exact a
+  exact b
+
+example (A : Prop) (h : A) : Or A (Not A) := Or.inl h

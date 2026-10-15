@@ -1,0 +1,46 @@
+-- 00_nat.l0 : 自然數加法交換律 —— induction + rw 的經典路線
+-- 執行: node lean0c.js lean0/00_nat.l0
+
+#check Nat.add
+#eval 2 + 3
+
+theorem add_zero (n : Nat) : n + 0 = n := by
+  induction n
+  rfl
+  intro k
+  intro ih
+  rw [ih]
+
+theorem zero_add (n : Nat) : 0 + n = n := by
+  induction n
+  rfl
+  intro k
+  intro ih
+  rw [ih]
+
+theorem add_succ (n m : Nat) : n + Nat.succ m = Nat.succ (n + m) := by
+  induction n
+  intro m
+  rfl
+  intro k
+  intro m
+  intro ih
+  intro m2
+  rw [ih]
+
+theorem succ_add (n m : Nat) : Nat.succ n + m = Nat.succ (n + m) := rfl
+
+theorem add_comm (n m : Nat) : n + m = m + n := by
+  induction n
+  intro m
+  rw [zero_add]
+  rw [add_zero]
+  intro k
+  intro m
+  intro ih
+  intro m2
+  rw [ih]
+  rw [add_succ]
+
+#check add_comm
+#eval 3 + 4

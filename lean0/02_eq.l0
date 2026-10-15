@@ -1,0 +1,30 @@
+-- 02_eq.l0 : 等式推理 —— rw 鏈、simp、congrArg、公理追蹤
+-- 執行: node lean0c.js lean0/02_eq.l0
+-- (各檔獨立執行，此處內嵌所需的 add_zero)
+
+theorem add_zero (n : Nat) : n + 0 = n := by
+  induction n
+  rfl
+  intro k
+  intro ih
+  rw [ih]
+
+example (a b c : Nat) (h1 : a = b) (h2 : b = c) : a = c := by
+  rw [h1]
+  rw [h2]
+
+example (n : Nat) : n + 0 + 0 = n := by
+  simp [add_zero]
+
+example (n m : Nat) (h : n = m) : Nat.succ n = Nat.succ m :=
+  congrArg Nat.succ h
+
+example (n : Nat) : Nat.succ (n + 0) = Nat.succ n := by
+  rw [add_zero]
+
+axiom em : forall A : Prop, Or A (Not A)
+
+example (A : Prop) : Or A (Not A) := em A
+
+#print axioms
+#print axioms em

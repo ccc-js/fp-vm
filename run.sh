@@ -6,3 +6,4 @@ set -x
 ./run_clj.sh
 ./run_ml.sh
 ./run_ocaml.sh
+./run_lean0.sh
